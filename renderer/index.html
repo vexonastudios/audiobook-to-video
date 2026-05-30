@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audiobook to Video by Vexona Studios</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/png" href="../assets/icon.png">
+</head>
+<body>
+
+  <!-- Custom Title Bar -->
+  <div class="titlebar" id="titlebar">
+    <div class="titlebar-drag">
+      <div class="titlebar-logo">
+        <img src="../assets/icon.png" alt="Logo" style="width: 18px; height: 18px; object-fit: contain;">
+      </div>
+      <span class="titlebar-title">Audiobook to Video by Vexona Studios</span>
+    </div>
+    <div class="titlebar-controls">
+      <button class="tb-btn" id="btn-minimize" title="Minimize">
+        <svg width="10" height="1" viewBox="0 0 10 1"><rect width="10" height="1" fill="currentColor"/></svg>
+      </button>
+      <button class="tb-btn" id="btn-maximize" title="Maximize">
+        <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1"/></svg>
+      </button>
+      <button class="tb-btn tb-btn--close" id="btn-close" title="Close">
+        <svg width="10" height="10" viewBox="0 0 10 10">
+          <line x1="0" y1="0" x2="10" y2="10" stroke="currentColor" stroke-width="1.5"/>
+          <line x1="10" y1="0" x2="0" y2="10" stroke="currentColor" stroke-width="1.5"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Layout -->
+  <div class="app-layout">
+
+    <!-- ── LEFT PANEL: Inputs ── -->
+    <aside class="panel panel-left" id="panel-left">
+      <div class="panel-section project-section">
+        <h3 class="section-title">Project</h3>
+        <div class="project-actions">
+          <button class="project-btn" id="btn-new-project" title="Start a New Project">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            New Project
+          </button>
+          <button class="project-btn" id="btn-save-project">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Save Project
+          </button>
+          <button class="project-btn" id="btn-load-project">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h4l2.251 -7.228a0.817 0.817 0 0 1 1.559 -.056l3.96 15.11a0.817 0.817 0 0 0 1.579 .038l2.428 -8.864h4"/><path d="M2 12h4l2.251 -7.228a0.817 0.817 0 0 1 1.559 -.056l3.96 15.11a0.817 0.817 0 0 0 1.579 .038l2.428 -8.864h4" style="display:none"/><path d="M3 15v4c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+            Load
+          </button>
+          <button class="project-btn" id="btn-tutorial" style="background:var(--accent-glow);color:var(--accent-light);border-color:var(--accent)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Tutorial
+          </button>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h3 class="section-title" style="color:var(--accent-light)">1. Output Destination</h3>
+        <div class="file-input-row">
+          <label class="file-label">Save Video To</label>
+          <div class="file-picker" id="fp-output">
+            <div class="fp-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </div>
+            <span class="fp-text" id="fp-output-text">Choose output location…</span>
+            <button class="fp-btn" id="btn-output">Browse</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h3 class="section-title">2. Book Assets</h3>
+
+        <div class="file-input-row">
+          <label class="file-label">Cover Image</label>
+          <div class="file-picker" id="fp-cover">
+            <div class="fp-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4-4L5 21"/></svg>
+            </div>
+            <span class="fp-text" id="fp-cover-text">Choose cover image…</span>
+            <button class="fp-btn" id="btn-cover">Browse</button>
+          </div>
+        </div>
+
+        <div class="file-input-row">
+          <label class="file-label">Background Image <span class="optional">(optional — uses blurred cover if empty)</span></label>
+          <div class="file-picker" id="fp-bg">
+            <div class="fp-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+            </div>
+            <span class="fp-text" id="fp-bg-text">None — using blurred cover</span>
+            <button class="fp-btn" id="btn-bg">Browse</button>
+            <button class="fp-btn fp-btn--clear" id="btn-bg-clear" style="display:none">✕</button>
+          </div>
+        </div>
+
+        <!-- Logo Library -->
+        <div class="file-input-row">
+          <label class="file-label">
+            Brand Logo
+            <span class="optional"> — library</span>
+          </label>
+          <!-- Active logo slot -->
+          <div class="file-picker" id="fp-logo" style="margin-bottom:8px">
+            <div class="fp-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            </div>
+            <span class="fp-text" id="fp-logo-text">Choose logo PNG…</span>
+            <button class="fp-btn" id="btn-logo">Add</button>
+          </div>
+          <!-- Library grid -->
+          <div class="logo-library" id="logo-library">
+            <!-- Filled by JS -->
+          </div>
+        </div>
+
+        <div class="file-input-row">
+          <label class="file-label">Audiobook WAV / Audio File</label>
+          <div class="file-picker" id="fp-wav">
+            <div class="fp-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            </div>
+            <span class="fp-text" id="fp-wav-text">Choose WAV file…</span>
+            <button class="fp-btn" id="btn-wav">Browse</button>
+          </div>
+          <div class="duration-display" id="duration-display" style="display:none">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            Duration: <span id="duration-text">—</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h3 class="section-title">Background Style</h3>
+
+        <div class="slider-row">
+          <label class="slider-label">
+            <span>Gaussian Blur</span>
+            <span class="slider-value" id="blur-val">40px</span>
+          </label>
+          <input type="range" id="blur-slider" min="0" max="80" value="40" class="slider">
+        </div>
+
+        <div class="slider-row">
+          <label class="slider-label">
+            <span>Background Opacity</span>
+            <span class="slider-value" id="opacity-val">65%</span>
+          </label>
+          <input type="range" id="opacity-slider" min="10" max="100" value="65" class="slider">
+        </div>
+
+        <div class="slider-row">
+          <label class="slider-label">
+            <span>BG Vertical Position</span>
+            <span class="slider-value" id="bg-offset-val">Center</span>
+          </label>
+          <input type="range" id="bg-offset-slider" min="-100" max="100" value="0" class="slider">
+        </div>
+
+        <div class="slider-row">
+          <label class="slider-label">
+            <span>Cover Border Thickness</span>
+            <span class="slider-value" id="border-val">0px</span>
+          </label>
+          <input type="range" id="border-slider" min="0" max="10" value="0" class="slider">
+        </div>
+
+        <div class="slider-row" style="align-items:center">
+          <label class="slider-label" style="margin-bottom:0">
+            <span>Title Font Size</span>
+          </label>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="number" id="title-fontsize-input" min="18" max="96" value="72"
+              style="width:62px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:13px;padding:4px 6px;text-align:center"
+              title="Title font size in pixels">
+            <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-muted);cursor:pointer;white-space:nowrap">
+              <input type="checkbox" id="title-fontsize-auto" checked
+                style="accent-color:var(--accent);cursor:pointer">
+              Auto
+            </label>
+          </div>
+        </div>
+
+        <div class="accent-row">
+          <label class="slider-label">Accent Color</label>
+          <div class="accent-display">
+            <input type="color" class="accent-swatch" id="accent-picker" value="#C9A96E">
+            <span class="accent-hex" id="accent-hex">#C9A96E</span>
+            <span class="accent-note" id="accent-note">(auto from cover)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h3 class="section-title">Chapter Transitions</h3>
+        <div class="slider-row" style="margin-bottom:0">
+          <label class="slider-label">
+            <span>Transition Style</span>
+          </label>
+          <select id="transition-select" class="transition-select">
+            <option value="cut">✂️  Cut (instant)</option>
+            <option value="fade" selected>⬛  Fade to Black</option>
+            <option value="dissolve">🔀  Cross Dissolve</option>
+            <option value="flare">✨  Lens Flare Burn</option>
+            <option value="zoom">🔍  Zoom Blur Push</option>
+          </select>
+        </div>
+        <div class="slider-row">
+          <label class="slider-label">
+            <span>Duration</span>
+            <span class="slider-value" id="transition-dur-val">1.0s</span>
+          </label>
+          <input type="range" id="transition-dur-slider" min="3" max="30" value="10" class="slider">
+          <div style="font-size:10px;color:var(--text-muted);margin-top:4px" id="transition-cut-note">No transition frames are added for Cut mode.</div>
+        </div>
+
+        <div class="slider-row" style="align-items:center;margin-top:8px">
+          <label class="slider-label" style="margin-bottom:0" title="If you're prepending an intro clip, enter its duration here. All YouTube chapter timestamps will be shifted by this amount and a '0:00 Intro' line will be prepended.">
+            <span>Intro Clip Duration</span>
+            <span style="font-size:10px;color:var(--text-muted);display:block;margin-top:2px">Shifts YouTube chapter timestamps</span>
+          </label>
+          <input type="text" id="intro-duration-input" value="0:00" placeholder="0:00"
+            style="width:72px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:13px;padding:4px 8px;text-align:center;font-family:monospace"
+            title="Format: M:SS or H:MM:SS — duration of your intro clip">
+        </div>
+      </div>
+    </aside>
+
+    <!-- ── CENTER: Preview ── -->
+    <main class="panel panel-center">
+      <div class="preview-header">
+        <h2 class="preview-title">Preview</h2>
+        <div class="preview-controls">
+          <label class="preview-ch-label">Chapter:</label>
+          <select id="preview-chapter-select" class="preview-select">
+            <option value="0">— load chapters —</option>
+          </select>
+          <button class="preview-refresh-btn" id="btn-refresh-preview" title="Refresh Preview">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Preview canvas wrapper at 640×360 -->
+      <div class="preview-wrapper">
+        <canvas id="previewCanvas" width="640" height="360"></canvas>
+        <div class="preview-overlay" id="preview-overlay">
+          <div class="preview-placeholder">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4-4L5 21"/>
+            </svg>
+            <p>Load a cover image to see preview</p>
+          </div>
+        </div>
+        <div class="preview-loading" id="preview-loading" style="display:none">
+          <div class="spinner"></div>
+          <span>Rendering preview…</span>
+        </div>
+      </div>
+
+      <!-- Export Button & Progress -->
+      <div class="export-section">
+        <!-- Codec + GPU status row -->
+        <div class="export-meta-row">
+          <div class="codec-selector-group">
+            <label class="codec-label" for="codec-select">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+              Codec
+            </label>
+            <select id="codec-select" class="codec-select">
+              <option value="h264" selected>H.264 — Max Compatibility</option>
+              <option value="h265">H.265 HEVC — Smaller Files (~40%)</option>
+            </select>
+          </div>
+          <div class="gpu-badge" id="gpu-badge" title="Hardware acceleration status">
+            <span class="gpu-badge-dot" id="gpu-badge-dot"></span>
+            <span class="gpu-badge-text" id="gpu-badge-text">Detecting…</span>
+          </div>
+        </div>
+
+        <div class="export-controls">
+          <button class="export-btn" id="btn-export" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            Render Video
+          </button>
+          <button class="stop-btn" id="btn-stop" style="display:none">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="4" y="4" width="16" height="16" rx="2"/>
+            </svg>
+            Stop
+          </button>
+        </div>
+
+        <div class="progress-section" id="progress-section" style="display:none">
+          <div class="progress-header">
+            <div class="progress-label" id="progress-label">Initializing…</div>
+            <div class="progress-pct" id="progress-pct">0%</div>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+          </div>
+        </div>
+
+        <div class="log-box" id="log-box" style="display:none">
+          <div class="log-content" id="log-content"></div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ── RIGHT PANEL: Chapters ── -->
+    <aside class="panel panel-right">
+      <div class="panel-section chapters-section">
+        <div class="chapters-header">
+          <h3 class="section-title">Chapter Markers</h3>
+          <div class="chapters-actions">
+            <button class="small-btn" id="btn-import-chapters">Import File</button>
+            <button class="small-btn small-btn--accent" id="btn-import-srt">Import SRT</button>
+            <button class="small-btn" id="btn-clear-chapters">Clear</button>
+          </div>
+        </div>
+
+        <div class="chapters-paste-area">
+          <textarea
+            id="chapters-textarea"
+            class="chapters-textarea"
+            placeholder="Paste chapter markers here:&#10;&#10;(0:00) Introduction&#10;(0:38) 1 - Double Trouble&#10;(14:37) 2 - A Rope of Silk&#10;(1:00:21) 3 - An Apartment Burglary"
+            spellcheck="false"
+          ></textarea>
+          <button class="parse-btn" id="btn-parse-chapters">Parse Chapters →</button>
+        </div>
+
+        <div class="chapters-list" id="chapters-list">
+          <!-- Filled by JS -->
+        </div>
+
+        <div class="chapters-summary" id="chapters-summary" style="display:none">
+          <span id="chapters-count">0 chapters</span>
+          <span class="chapters-total-dur" id="chapters-total-dur"></span>
+        </div>
+      </div>
+    </aside>
+
+  </div><!-- end app-layout -->
+
+  <!-- Tutorial Modal -->
+  <div class="modal-overlay hidden" id="tutorial-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>How to Use Audiobook to Video</h2>
+        <button class="modal-close" id="btn-close-tutorial">✕</button>
+      </div>
+      <div class="modal-body tutorial-body">
+        <p>This tool turns your audiobook audio files and book cover into an engaging, animated YouTube video. Follow these steps to get started:</p>
+        
+        <h3>1. Set Output Destination</h3>
+        <p>Always start by choosing where to save your final <code>.mp4</code> video file in the <strong>Output Destination</strong> section.</p>
+
+        <h3>2. Add Your Book Assets</h3>
+        <ul>
+          <li><strong>Cover Image:</strong> Select the book's cover art. The app will automatically extract the dominant accent color to tint your UI and text!</li>
+          <li><strong>Background Image:</strong> Optional. Leave it blank to use a dynamic, blurred version of your cover.</li>
+          <li><strong>Brand Logo:</strong> Add your publisher or series logo. The app builds a library of your logos and automatically tints the active one to match the cover's accent color.</li>
+          <li><strong>Audio File:</strong> Select the full WAV, MP3, or M4A audiobook file. The app will calculate the total duration.</li>
+        </ul>
+
+        <h3>3. Define Chapters (Right Panel)</h3>
+        <p>You need chapter markers to tell the app when to transition. You can type them manually, import a text file, or import an SRT subtitle file.</p>
+        <div class="code-block">
+          (0:00) Introduction<br>
+          (1:45) 1 - The Journey Begins<br>
+          (45:20) 2 - The Sea of Darkness
+        </div>
+        <p><em>Click <strong>Parse Chapters</strong> to validate them. You will see a list appear!</em></p>
+
+        <h3>4. Adjust Styles & Preview (Center Panel)</h3>
+        <p>Use the sliders on the left to adjust background blur and opacity. You can also pick a <strong>Transition Style</strong> (like Fade, Cross Dissolve, or Zoom Blur) and set its duration. Use the <strong>Preview</strong> section's dropdown to see exactly what each chapter will look like.</p>
+
+        <h3>5. Render Video</h3>
+        <p>Once your fields are filled and chapters are parsed, click <strong>Render Video</strong>. The app uses your <strong>NVIDIA RTX GPU (NVENC)</strong> to encode the video in hardware — massively faster than CPU encoding! Choose <strong>H.264</strong> for max compatibility or <strong>H.265 HEVC</strong> for ~40% smaller file sizes. The 🎮 GPU badge in the export bar confirms hardware acceleration is active.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

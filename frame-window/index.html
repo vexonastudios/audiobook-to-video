@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Frame Renderer</title>
+  <link rel="icon" type="image/png" href="../assets/icon.png">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 1280px; height: 720px; overflow: hidden; background: #000; }
+
+    /* Load EB Garamond from local fontsource package */
+    @font-face {
+      font-family: 'EB Garamond';
+      src: url('../node_modules/@fontsource/eb-garamond/files/eb-garamond-latin-400-normal.woff2') format('woff2');
+      font-weight: 400;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'EB Garamond';
+      src: url('../node_modules/@fontsource/eb-garamond/files/eb-garamond-latin-500-normal.woff2') format('woff2');
+      font-weight: 500;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'EB Garamond';
+      src: url('../node_modules/@fontsource/eb-garamond/files/eb-garamond-latin-700-normal.woff2') format('woff2');
+      font-weight: 700;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'EB Garamond';
+      src: url('../node_modules/@fontsource/eb-garamond/files/eb-garamond-latin-400-italic.woff2') format('woff2');
+      font-weight: 400;
+      font-style: italic;
+    }
+
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="mainCanvas" width="1280" height="720"></canvas>
+
+  <script>
+  // ─────────────────────────────────────────────────────────────
+  // Image cache — avoids reloading the same image multiple times
+  // ─────────────────────────────────────────────────────────────
+  const imageCache = {};
+
+  function loadImage(src) {
+    if (imageCache[src]) return Promise.resolve(imageCache[src]);
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        imageCache[src] = img;
+        resolve(img);
+      };
+      img.onerror = (e) => reject(new Error(`Failed to load image: ${src.slice(0, 60)}`));
+      img.src = src;
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Text utilities
+  // ─────────────────────────────────────────────────────────────
+
+  function wrapText(ctx, text, maxWidth) {
+    function greedyWrap(words, width) {
+      const lines = [];
+      let current = '';
+      for (const word of words) {
+        const test = current ? `${current} ${word}` : word;
+        if (ctx.measureText(test).width > width && current) {
+          lines.push(current);
+          current = word;
+        } else {
+          current = test;
+        }
+      }
+      if (current) lines.push(current);
+      return lines;
+    }
+
+    const words = text.split(' ');
+    const minLines = greedyWrap(words, maxWidth).length;
+    if (minLines <= 1) return [text];
+
+    // Binary search for the smallest target width that forces exactly `minLines`
+    // This perfectly balances the line lengths and avoids single-word orphans!
+    let low = Math.max(ctx.measureText(text).width / minLines, maxWidth * 0.4);
+    let high = maxWidth;
+    let bestLines = [];
+
+    while (high - low > 3) {
+      const mid = (low + high) / 2;
+      const testLines = greedyWrap(words, mid);
+      if (testLines.length <= minLines) {
+        bestLines = testLines;
+        high = mid; // try to squeeze it even narrower to balance further
+      } else {
+        low = mid;  // too narrow, it broke into more lines
+      }
+    }
+    
+    return bestLines.length > 0 ? bestLines : greedyWrap(words, maxWidth);
+  }
+
+  /**
+   * Finds the largest font size where text fits within maxWidth × maxHeight,
+   * with word-wrapping.
+   */
+  function fitText(ctx, text, family, maxSize, minSize, maxWidth, maxHeight) {
+    let fontSize = maxSize;
+    let lines = [];
+
+    while (fontSize >= minSize) {
+      ctx.font = `${fontSize}px "${family}"`;
+      lines = wrapText(ctx, text, maxWidth);
+      const totalH = lines.length * fontSize * 1.25;
+      if (totalH <= maxHeight) break;
+      fontSize -= 3;
+    }
+
+    return { fontSize, lines };
+  }
+
+  /**
+   * Draw centered tracked-uppercase text character-by-character (for "CHAPTER N" label)
+   */
+  function drawTracked(ctx, text, centerX, y, tracking) {
+    const chars = text.split('');
+    let totalW = 0;
+    const widths = chars.map(c => { const w = ctx.measureText(c).width; totalW += w; return w; });
+    totalW += tracking * (chars.length - 1);
+
+    let x = centerX - totalW / 2;
+    chars.forEach((c, i) => {
+      ctx.fillText(c, x, y);
+      x += widths[i] + tracking;
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Draw a rounded rectangle
+  // ─────────────────────────────────────────────────────────────
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Core rendering function — draws one complete 1280×720 frame
+  // ─────────────────────────────────────────────────────────────
+
+  async function drawChapterFrame(ctx, params, alpha) {
+    const {
+      chapter,
+      coverDataURL,
+      bgDataURL,
+      blurAmount = 40,
+      bgOpacity = 0.65,
+      accentColor = [201, 169, 110],
+      logoDataURL = null,
+      coverBorderWidth = 0,
+      titleFontSize: fixedFontSize = 0
+    } = params;
+
+    const W = 1280, H = 720;
+    const [ar, ag, ab] = accentColor;
+    const accentCSS = `rgb(${ar},${ag},${ab})`;
+
+    // ── 1. Background: blurred image fill ──────────────────────
+    ctx.save();
+    ctx.clearRect(0, 0, W, H);
+
+    // Black base
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, W, H);
+
+    // Blurred background image — cover-scale (no stretch), centered
+    const { bgOffsetY = 0 } = params;
+    const bgImg = await loadImage(bgDataURL || coverDataURL);
+    const pad = Math.max(blurAmount * 2, 20);
+    ctx.filter = `blur(${blurAmount}px)`;
+    ctx.globalAlpha = bgOpacity;
+
+    // Scale proportionally so the image COVERS the full canvas (like CSS background-size:cover)
+    // then center it so neither axis has empty bars.
+    const coverW = W + pad * 2;
+    const coverH = H + pad * 2;
+    const bgScale = Math.max(coverW / bgImg.naturalWidth, coverH / bgImg.naturalHeight);
+    const bw = bgImg.naturalWidth  * bgScale;
+    const bh = bgImg.naturalHeight * bgScale;
+    const bx = -pad + (coverW - bw) / 2;
+    // bgOffsetY: 0 = centered, -100 = fully up (show bottom), +100 = fully down (show top)
+    const overflowY = bh - coverH;
+    const offsetPx = (bgOffsetY / 100) * (overflowY / 2);
+    const by = -pad + (coverH - bh) / 2 + offsetPx;
+    ctx.drawImage(bgImg, bx, by, bw, bh);
+
+    ctx.filter = 'none';
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // Dark overlay to ensure readability
+    ctx.fillStyle = `rgba(0,0,0,${0.55 - bgOpacity * 0.15})`;
+    ctx.fillRect(0, 0, W, H);
+
+    // ── 2. Book cover (left side) ──────────────────────────────
+    const coverImg = await loadImage(coverDataURL);
+
+    // Cover area: left region
+    const coverAreaX = 38;
+    const coverAreaY = 35;
+    const coverAreaW = 460;
+    const coverAreaH = 650;
+
+    // Fit cover into area
+    const scale = Math.min(coverAreaW / coverImg.naturalWidth, coverAreaH / coverImg.naturalHeight);
+    const cw = coverImg.naturalWidth * scale;
+    const ch = coverImg.naturalHeight * scale;
+    const cx = coverAreaX + (coverAreaW - cw) / 2;
+    const cy = coverAreaY + (coverAreaH - ch) / 2;
+
+    // Drop shadow
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+    ctx.shadowBlur = 45;
+    ctx.shadowOffsetX = 12;
+    ctx.shadowOffsetY = 12;
+
+    if (coverBorderWidth > 0) {
+      ctx.strokeStyle = `rgb(${accentColor.join(',')})`;
+      ctx.lineWidth = coverBorderWidth;
+      ctx.strokeRect(cx - coverBorderWidth/2, cy - coverBorderWidth/2, cw + coverBorderWidth, ch + coverBorderWidth);
+    }
+    
+    ctx.drawImage(coverImg, cx, cy, cw, ch);
+    ctx.restore();
+
+    // ── 3. Chapter text (right side) ───────────────────────────
+    const textAreaX = 520;
+    const textAreaW = W - textAreaX - 40;
+    const textCenterX = textAreaX + textAreaW / 2;
+
+    // Anchor the top of the text block so all chapters start at the exact same Y position
+    const hasNumber = chapter.isNumbered && chapter.number !== null;
+    const fixedAnchorY = chapter.dateRange ? 230 : 270;
+
+    ctx.save();
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+
+    if (hasNumber) {
+      // "CHAPTER N" label
+      const labelFontSize = 24;
+      ctx.font = `400 ${labelFontSize}px "EB Garamond"`;
+      ctx.fillStyle = accentCSS;
+      const labelY = fixedAnchorY;
+      drawTracked(ctx, `CHAPTER ${chapter.number}`, textCenterX, labelY, 4.5);
+
+      // Subtle separator line
+      const lineW = 120;
+      ctx.strokeStyle = `rgba(${ar},${ag},${ab},0.45)`;
+      ctx.lineWidth = 1;
+      const lineY = labelY + 28; // Increased gap between label and line
+      ctx.beginPath();
+      ctx.moveTo(textCenterX - lineW / 2, lineY);
+      ctx.lineTo(textCenterX + lineW / 2, lineY);
+      ctx.stroke();
+
+      // Chapter title (large)
+      // If a fixed font size is set, use it directly (still word-wraps).
+      // Otherwise auto-fit to the available box.
+      let fontSize, lines;
+      if (fixedFontSize > 0) {
+        fontSize = fixedFontSize;
+        ctx.font = `400 ${fontSize}px "EB Garamond"`; // must set font BEFORE wrapText so measureText is correct
+        lines = wrapText(ctx, chapter.title, textAreaW - 40);
+      } else {
+        ({ fontSize, lines } = fitText(ctx, chapter.title, 'EB Garamond', 72, 32, textAreaW - 40, 260));
+        ctx.font = `400 ${fontSize}px "EB Garamond"`;
+      }
+      ctx.fillStyle = 'rgba(255,255,255,0.96)';
+
+      const lineH = fontSize * 1.28;
+      // Fixed distance from the separator line to the first line of the title!
+      const titleStartY = lineY + 38 + (fontSize / 2);
+
+      lines.forEach((line, i) => {
+        ctx.fillText(line, textCenterX, titleStartY + i * lineH);
+      });
+
+      // Date range subtitle (e.g. "1826–1829")
+      if (chapter.dateRange) {
+        const drFontSize = Math.max(26, fontSize * 0.55);
+        ctx.font = `italic 400 ${drFontSize}px "EB Garamond"`;
+        ctx.fillStyle = accentCSS;
+        const drY = titleStartY + lines.length * lineH + drFontSize * 0.6;
+        ctx.fillText(chapter.dateRange, textCenterX, drY);
+      }
+
+    } else {
+      // Unnumbered (e.g. "Introduction") — just the title, larger, centered
+      let fontSize, lines;
+      if (fixedFontSize > 0) {
+        fontSize = fixedFontSize;
+        ctx.font = `400 ${fontSize}px "EB Garamond"`; // must set font BEFORE wrapText so measureText is correct
+        lines = wrapText(ctx, chapter.title, textAreaW - 40);
+      } else {
+        ({ fontSize, lines } = fitText(ctx, chapter.title, 'EB Garamond', 80, 36, textAreaW - 40, 300));
+        ctx.font = `400 ${fontSize}px "EB Garamond"`;
+      }
+      ctx.fillStyle = 'rgba(255,255,255,0.96)';
+
+      const lineH = fontSize * 1.28;
+      // Start at the same vertical place the title would normally start
+      const titleStartY = fixedAnchorY + 28 + 38 + (fontSize / 2);
+
+      lines.forEach((line, i) => {
+        ctx.fillText(line, textCenterX, titleStartY + i * lineH);
+      });
+
+      // Date range subtitle
+      if (chapter.dateRange) {
+        const drFontSize = Math.max(28, fontSize * 0.55);
+        ctx.font = `italic 400 ${drFontSize}px "EB Garamond"`;
+        ctx.fillStyle = accentCSS;
+        const drY = titleStartY + lines.length * lineH + drFontSize * 0.6;
+        ctx.fillText(chapter.dateRange, textCenterX, drY);
+      }
+    }
+
+    ctx.restore();
+
+    // ── 4. Logo (bottom right) ─────────────────────────────────
+    if (logoDataURL) {
+      try {
+        const logoImg = await loadImage(logoDataURL);
+        const logoMaxW = 180;
+        const logoMaxH = 60;
+        const lScale = Math.min(logoMaxW / logoImg.naturalWidth, logoMaxH / logoImg.naturalHeight);
+        const lw = logoImg.naturalWidth * lScale;
+        const lh = logoImg.naturalHeight * lScale;
+        const lx = W - lw - 28;
+        const ly = H - lh - 22;
+        ctx.globalAlpha = 0.9;
+        ctx.drawImage(logoImg, lx, ly, lw, lh);
+        ctx.globalAlpha = 1;
+      } catch (_) {}
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Public renderFrame — handles transitions via blendAlpha
+  // ─────────────────────────────────────────────────────────────
+
+  window.renderFrame = async function(params) {
+    const {
+      blendAlpha = 0,
+      nextChapter = null,
+      transitionType = null,
+      fadeAlpha = 1,
+      flareAlpha = 0,
+      zoomAlpha = 1,
+      zoomIn = true
+    } = params;
+
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d');
+    const W = 1280, H = 720;
+
+    if (!nextChapter || blendAlpha <= 0) {
+      // Straight render
+      await drawChapterFrame(ctx, params, 1);
+    } else if (blendAlpha >= 1) {
+      // Full next chapter
+      await drawChapterFrame(ctx, { ...params, chapter: nextChapter }, 1);
+    } else {
+      // Crossfade: draw current chapter to offscreen, draw next to offscreen, blend
+      const offA = new OffscreenCanvas(W, H);
+      const offB = new OffscreenCanvas(W, H);
+
+      await drawChapterFrame(offA.getContext('2d'), params, 1 - blendAlpha);
+      await drawChapterFrame(offB.getContext('2d'), { ...params, chapter: nextChapter }, blendAlpha);
+
+      ctx.clearRect(0, 0, W, H);
+      ctx.globalAlpha = 1 - blendAlpha;
+      ctx.drawImage(offA, 0, 0);
+      ctx.globalAlpha = blendAlpha;
+      ctx.drawImage(offB, 0, 0);
+      ctx.globalAlpha = 1;
+    }
+
+    // ── Post-process: apply transition overlay ─────────────────────
+    if (transitionType === 'fade') {
+      // fadeAlpha = 1 means fully visible, 0 means black
+      ctx.fillStyle = `rgba(0,0,0,${1 - fadeAlpha})`;
+      ctx.fillRect(0, 0, W, H);
+
+    } else if (transitionType === 'flare') {
+      // flareAlpha = 0 means chapter visible, 1 means white hot flare
+      // Radial gradient centered flare
+      const grd = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W * 0.75);
+      grd.addColorStop(0, `rgba(255,255,255,${flareAlpha})`);
+      grd.addColorStop(0.4, `rgba(255,240,200,${flareAlpha * 0.9})`);
+      grd.addColorStop(1, `rgba(255,220,160,${flareAlpha * 0.4})`);
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, W, H);
+
+    } else if (transitionType === 'zoom') {
+      // Zoom by scaling the current canvas contents around center
+      // zoomAlpha = 1 fully visible, 0 fully black
+      // zoomIn=true: scale up (zoom in); zoomIn=false: scale down (zoom out)
+      const scale = zoomIn
+        ? 1 + (1 - zoomAlpha) * 0.18   // 1.0 → 1.18 as frame fades
+        : 1 + zoomAlpha * 0.18;          // 1.18 → 1.0 as frame appears
+
+      if (Math.abs(scale - 1) > 0.001) {
+        const snap = new OffscreenCanvas(W, H);
+        snap.getContext('2d').drawImage(canvas, 0, 0);
+        ctx.clearRect(0, 0, W, H);
+        ctx.save();
+        ctx.translate(W / 2, H / 2);
+        ctx.scale(scale, scale);
+        ctx.drawImage(snap, -W / 2, -H / 2);
+        ctx.restore();
+      }
+
+      // Fade overlay
+      ctx.fillStyle = `rgba(0,0,0,${1 - zoomAlpha})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    return true;
+  };
+
+
+  // Warm-up: render a black frame on load so the canvas is ready
+  window.addEventListener('load', () => {
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, 1280, 720);
+
+    // Trigger font load
+    ctx.font = '72px "EB Garamond"';
+    ctx.fillStyle = 'transparent';
+    ctx.fillText('', 0, 0);
+    document.fonts.ready.then(() => console.log('[FrameWindow] Fonts ready'));
+  });
+  </script>
+</body>
+</html>

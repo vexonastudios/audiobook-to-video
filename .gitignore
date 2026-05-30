@@ -1,0 +1,7 @@
+node_modules/
+dist/
+out.mp4
+test_nvenc.mp4
+test.png
+*.log
+.DS_Store

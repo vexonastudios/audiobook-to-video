@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { autoUpdater } = require('electron-updater');
 
 // Hardware acceleration is ENABLED intentionally — the GPU accelerates
 // the hidden frame-window canvas renderer (the slowest step of the pipeline).
@@ -53,9 +54,41 @@ function createFrameWindow() {
   frameWindow.loadFile(path.join(__dirname, 'frame-window', 'index.html'));
 }
 
+// ─────────────────────────────────────────────
+// Auto-Updater
+// ─────────────────────────────────────────────
+
+autoUpdater.on('update-available', (info) => {
+  console.log('Update available.', info);
+});
+autoUpdater.on('update-downloaded', (info) => {
+  console.log('Update downloaded.', info);
+  dialog.showMessageBox({
+    type: 'info',
+    title: 'Update Ready',
+    message: 'A new version of Audiobook to Video has been downloaded. Restart the application to apply the update.',
+    buttons: ['Restart', 'Later']
+  }).then((result) => {
+    if (result.response === 0) {
+      autoUpdater.quitAndInstall();
+    }
+  });
+});
+autoUpdater.on('error', (err) => {
+  console.error('Error in auto-updater.', err);
+});
+
+// App lifecycle
 app.whenReady().then(() => {
   createMainWindow();
   createFrameWindow();
+
+  // Check for updates (only runs in packaged app)
+  try {
+    autoUpdater.checkForUpdatesAndNotify();
+  } catch (e) {
+    console.error('Auto-updater error on startup:', e);
+  }
 });
 
 app.on('window-all-closed', () => {

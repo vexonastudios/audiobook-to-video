@@ -58,6 +58,10 @@ async function renderVideo(params, callbacks) {
     coverBorderWidth = 0,
     transitionStyle = 'fade',
     transitionDuration = 1.0,
+    introClipPath = null,
+    introAudioEnabled = true,
+    introStyle = 'overlap',
+    introFadeDuration = 1.0,
     codec = 'h264'   // 'h264' = h264_nvenc/libx264 | 'h265' = hevc_nvenc/libx265
   } = params;
 
@@ -256,6 +260,9 @@ async function renderVideo(params, callbacks) {
       ? ['-c:a', 'copy'] 
       : ['-c:a', 'aac', '-b:a', '192k'];
 
+    const hasIntro = !!introClipPath;
+    const muxedTempPath = hasIntro ? path.join(tmpDir, 'muxed_temp.mp4') : outputPath;
+
     await runFFmpegWithProgress({
       args: [
         '-i', mergedVideoPath,
@@ -264,12 +271,12 @@ async function renderVideo(params, callbacks) {
         ...audioCodecArgs,
         '-shortest',
         '-movflags', '+faststart',
-        '-y', outputPath
+        '-y', muxedTempPath
       ],
       totalDuration,
       isCancelled,
       onProgress: (sec) => {
-        const pct = 94 + Math.round((sec / totalDuration) * 5);
+        const pct = 94 + Math.round((sec / totalDuration) * (hasIntro ? 3 : 5));
         onProgress({
           phase: 'encoding',
           percent: Math.min(99, pct),
@@ -277,6 +284,96 @@ async function renderVideo(params, callbacks) {
         });
       }
     });
+
+    // ── 7. Prepend Intro Clip ───────────────────────────────────────
+    if (hasIntro) {
+      onLog('\n🎬 Prepending intro clip...');
+      onProgress({ phase: 'encoding', percent: 98, label: 'Adding intro clip...' });
+
+      // We need the duration and audio info of the intro clip
+      const introData = await getVideoDuration(introClipPath);
+      const useAudio = introAudioEnabled && introData.hasAudio;
+
+      const filterArgs = [];
+
+      if (introStyle === 'overlap') {
+        const D = introFadeDuration;
+        const T = Math.max(0, introData.duration - D);
+        
+        // We scale the intro to 1280x720 (to match frameWindow), force the fps, and apply xfade.
+        if (useAudio) {
+          filterArgs.push(
+            '-filter_complex',
+            `[0:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS}[v0]; ` +
+            `[1:v]fps=${OUTPUT_FPS}[v1]; ` +
+            `[v0][v1]xfade=transition=fade:duration=${D}:offset=${T}[vout]; ` +
+            `[0:a][1:a]acrossfade=d=${D}[aout]`,
+            '-map', '[vout]',
+            '-map', '[aout]'
+          );
+        } else {
+          filterArgs.push(
+            '-filter_complex',
+            `[0:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS}[v0]; ` +
+            `[1:v]fps=${OUTPUT_FPS}[v1]; ` +
+            `[v0][v1]xfade=transition=fade:duration=${D}:offset=${T}[vout]`,
+            '-map', '[vout]',
+            '-map', '1:a'
+          );
+        }
+      } else {
+        // Sequential / Push style using concat
+        if (useAudio) {
+          filterArgs.push(
+            '-filter_complex',
+            `[0:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS}[v0]; ` +
+            `[1:v]fps=${OUTPUT_FPS}[v1]; ` +
+            `[v0][0:a][v1][1:a]concat=n=2:v=1:a=1[vout][aout]`,
+            '-map', '[vout]',
+            '-map', '[aout]'
+          );
+        } else {
+          // If no intro audio, generate silence so concat still works seamlessly
+          filterArgs.push(
+            '-filter_complex',
+            `[0:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS}[v0]; ` +
+            `[1:v]fps=${OUTPUT_FPS}[v1]; ` +
+            `anullsrc=d=${introData.duration}:r=44100[silence]; ` +
+            `[v0][silence][v1][1:a]concat=n=2:v=1:a=1[vout][aout]`,
+            '-map', '[vout]',
+            '-map', '[aout]'
+          );
+        }
+      }
+
+      const nvencCodec = codec === 'h265' ? 'hevc_nvenc' : 'h264_nvenc';
+      const cpuCodec = codec === 'h265' ? 'libx265' : 'libx264';
+      const finalCodec = useGPU ? nvencCodec : cpuCodec;
+      
+      const encodeArgs = useGPU ? [
+        '-c:v', finalCodec,
+        '-preset', 'p4',
+        '-tune', 'hq',
+        '-rc', 'vbr',
+        '-cq', String(crf),
+        '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac', '-b:a', '192k'
+      ] : [
+        '-c:v', finalCodec,
+        '-preset', 'fast',
+        '-crf', String(crf),
+        '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac', '-b:a', '192k'
+      ];
+
+      await runFFmpeg([
+        '-i', introClipPath,
+        '-i', muxedTempPath,
+        ...filterArgs,
+        ...encodeArgs,
+        '-y', outputPath
+      ], isCancelled);
+    }
 
     onLog('\n✅ Video export complete!');
     onProgress({ phase: 'done', percent: 100 });
@@ -535,4 +632,16 @@ function getAudioDuration(wavPath) {
   });
 }
 
-module.exports = { renderVideo, getAudioDuration };
+function getVideoDuration(videoPath) {
+  return new Promise((resolve, reject) => {
+    fluent.ffprobe(videoPath, (err, metadata) => {
+      if (err) reject(new Error(err.message));
+      else {
+        const hasAudio = metadata.streams.some(s => s.codec_type === 'audio');
+        resolve({ duration: metadata.format.duration, hasAudio });
+      }
+    });
+  });
+}
+
+module.exports = { renderVideo, getAudioDuration, getVideoDuration };

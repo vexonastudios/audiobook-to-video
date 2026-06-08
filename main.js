@@ -147,6 +147,15 @@ ipcMain.handle('pick-logo', async () => {
   return result.filePaths[0] || null;
 });
 
+ipcMain.handle('pick-intro-clip', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Select Video Intro Clip',
+    filters: [{ name: 'Video', extensions: ['mp4', 'mov', 'mkv'] }],
+    properties: ['openFile']
+  });
+  return result.filePaths[0] || null;
+});
+
 ipcMain.handle('pick-output', async (event, suggestedName) => {
   const result = await dialog.showSaveDialog(mainWindow, {
     title: 'Save Video As',
@@ -270,6 +279,15 @@ ipcMain.handle('get-audio-duration', async (event, wavPath) => {
   try {
     const { getAudioDuration } = require('./src/videoEncoder');
     return await getAudioDuration(wavPath);
+  } catch (e) {
+    throw new Error(e.message);
+  }
+});
+
+ipcMain.handle('get-video-duration', async (event, videoPath) => {
+  try {
+    const { getVideoDuration } = require('./src/videoEncoder');
+    return await getVideoDuration(videoPath);
   } catch (e) {
     throw new Error(e.message);
   }

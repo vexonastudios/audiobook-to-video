@@ -38,6 +38,15 @@ const state = {
   // Title font size: 0 = auto-fit, >0 = fixed px
   titleFontSize: 0,
 
+  // Intro clip
+  introClipPath: null,
+  introClipEnabled: false,
+  introAudioEnabled: true,
+  introStyle: 'overlap',     // 'overlap' | 'push'
+  introFadeDuration: 1.0,
+  introHasAudio: false,
+  introDurationRaw: 0,       // exact probed duration
+
   // Intro clip duration in seconds (shifts YouTube chapter timestamps)
   introDuration: 0,
 
@@ -77,6 +86,7 @@ const els = {
   fpLogo: $('fp-logo'),
   fpWav: $('fp-wav'),
   fpOutput: $('fp-output'),
+  fpIntro: $('fp-intro'),
 
   btnCover: $('btn-cover'),
   btnBg: $('btn-bg'),
@@ -84,9 +94,23 @@ const els = {
   btnLogo: $('btn-logo'),
   btnWav: $('btn-wav'),
   btnOutput: $('btn-output'),
+  btnIntro: $('btn-intro'),
 
   durationDisplay: $('duration-display'),
   durationText: $('duration-text'),
+  
+  introDurationDisplay: $('intro-duration-display'),
+  introDurationText: $('intro-duration-text'),
+  fpIntroText: $('fp-intro-text'),
+
+  // Intro Settings
+  introEnableToggle: $('intro-enable-toggle'),
+  introSettings: $('intro-settings'),
+  introAudioToggle: $('intro-audio-toggle'),
+  introStyleSelect: $('intro-style-select'),
+  introFadeRow: $('intro-fade-row'),
+  introFadeSlider: $('intro-fade-slider'),
+  introFadeVal: $('intro-fade-val'),
 
   // Sliders
   blurSlider: $('blur-slider'),
@@ -192,6 +216,13 @@ els.btnNewProject.addEventListener('click', () => {
       coverBorderWidth: 0,
       transitionStyle: 'fade',
       transitionDuration: 1.0,
+      introClipPath: null,
+      introClipEnabled: false,
+      introAudioEnabled: true,
+      introStyle: 'overlap',
+      introFadeDuration: 1.0,
+      introHasAudio: false,
+      introDurationRaw: 0,
       chapters: [],
       selectedChapterIndex: 0,
       isRendering: false
@@ -227,6 +258,17 @@ els.btnNewProject.addEventListener('click', () => {
 
     els.fpOutputText.textContent = 'Choose output location…';
     els.fpOutput.classList.remove('has-file');
+
+    els.fpIntroText.textContent = 'Choose intro clip…';
+    els.fpIntro.classList.remove('has-file');
+    els.introDurationDisplay.style.display = 'none';
+    els.introEnableToggle.checked = false;
+    els.introSettings.style.display = 'none';
+    els.introAudioToggle.checked = true;
+    els.introStyleSelect.value = 'overlap';
+    els.introFadeRow.style.display = 'flex';
+    els.introFadeSlider.value = 10;
+    els.introFadeVal.textContent = '1.0s';
 
     els.blurSlider.value = 40;
     els.blurVal.textContent = '40px';
@@ -509,6 +551,79 @@ els.btnOutput.addEventListener('click', async () => {
   setFilePicked(els.fpOutput, els.fpOutputText, filePath);
   saveSession();
   checkExportReady();
+});
+
+// ─────────────────────────────────────────────────────────────
+// Intro Clip
+// ─────────────────────────────────────────────────────────────
+
+function updateIntroShift() {
+  if (state.introDurationRaw > 0) {
+    const shift = state.introStyle === 'overlap' 
+      ? Math.max(0, state.introDurationRaw - state.introFadeDuration) 
+      : state.introDurationRaw;
+    state.introDuration = shift;
+    
+    const min = Math.floor(shift / 60);
+    const sec = Math.floor(shift % 60);
+    els.introDurationInput.value = `${min}:${String(sec).padStart(2, '0')}`;
+    
+    if (state.chapters.length > 0) {
+      assignEndTimes();
+      renderChapterList();
+    }
+  }
+}
+
+els.introEnableToggle.addEventListener('change', () => {
+  state.introClipEnabled = els.introEnableToggle.checked;
+  els.introSettings.style.display = state.introClipEnabled ? 'block' : 'none';
+  saveSession();
+});
+
+els.introAudioToggle.addEventListener('change', () => {
+  state.introAudioEnabled = els.introAudioToggle.checked;
+  saveSession();
+});
+
+els.introStyleSelect.addEventListener('change', () => {
+  state.introStyle = els.introStyleSelect.value;
+  els.introFadeRow.style.display = state.introStyle === 'overlap' ? 'flex' : 'none';
+  updateIntroShift();
+  saveSession();
+});
+
+els.introFadeSlider.addEventListener('input', () => {
+  const val = parseInt(els.introFadeSlider.value) / 10;
+  state.introFadeDuration = val;
+  els.introFadeVal.textContent = val.toFixed(1) + 's';
+});
+els.introFadeSlider.addEventListener('change', () => {
+  updateIntroShift();
+  saveSession();
+});
+
+els.btnIntro.addEventListener('click', async () => {
+  const filePath = await window.api.pickIntroClip();
+  if (!filePath) return;
+
+  state.introClipPath = filePath;
+  setFilePicked(els.fpIntro, els.fpIntroText, filePath);
+
+  try {
+    const { duration, hasAudio } = await window.api.getVideoDuration(filePath);
+    state.introDurationRaw = duration;
+    state.introHasAudio = hasAudio;
+    
+    els.introDurationText.textContent = formatDuration(duration);
+    els.introDurationDisplay.style.display = 'flex';
+    
+    updateIntroShift();
+  } catch (e) {
+    addLog(`⚠ Could not read intro video duration: ${e.message}`, 'err');
+  }
+
+  saveSession();
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -1210,6 +1325,11 @@ async function beginRender() {
     logoDataURL: state.logoProcessedDataURL || state.logoDataURL || null,
     transitionStyle: state.transitionStyle,
     transitionDuration: state.transitionDuration,
+    introClipPath: state.introClipEnabled ? state.introClipPath : null,
+    introAudioEnabled: state.introAudioEnabled,
+    introStyle: state.introStyle,
+    introFadeDuration: state.introFadeDuration,
+    introHasAudio: state.introHasAudio,
     codec: state.codec,
     crf: 18
   };
@@ -1454,6 +1574,13 @@ function saveSession() {
     titleFontsizeAuto: els.titleFontsizeAuto.checked,
     introDuration: state.introDuration,
     introDurationStr: els.introDurationInput.value,
+    introClipPath: state.introClipPath,
+    introClipEnabled: state.introClipEnabled,
+    introAudioEnabled: state.introAudioEnabled,
+    introStyle: state.introStyle,
+    introFadeDuration: state.introFadeDuration,
+    introHasAudio: state.introHasAudio,
+    introDurationRaw: state.introDurationRaw,
     accentColor: state.accentColor,
     isCustomColor: state.isCustomColor
   };
@@ -1486,10 +1613,35 @@ async function restoreSession() {
         els.titleFontsizeInput.value = d0.titleFontSize;
       }
       updateTitleFontsizeUI();
-      // Intro duration
+      // Intro duration & clip config
       if (d0.introDurationStr) {
         els.introDurationInput.value = d0.introDurationStr;
         state.introDuration = parseIntroDuration(d0.introDurationStr);
+      }
+      if (d0.introFadeDuration !== undefined) {
+        state.introFadeDuration = d0.introFadeDuration;
+        els.introFadeSlider.value = Math.round(d0.introFadeDuration * 10);
+        els.introFadeVal.textContent = d0.introFadeDuration.toFixed(1) + 's';
+      }
+      if (d0.introAudioEnabled !== undefined) {
+        state.introAudioEnabled = d0.introAudioEnabled;
+        els.introAudioToggle.checked = d0.introAudioEnabled;
+      }
+      if (d0.introStyle !== undefined) {
+        state.introStyle = d0.introStyle;
+        els.introStyleSelect.value = d0.introStyle;
+        els.introFadeRow.style.display = d0.introStyle === 'overlap' ? 'flex' : 'none';
+      }
+      if (d0.introDurationRaw !== undefined) {
+        state.introDurationRaw = d0.introDurationRaw;
+      }
+      if (d0.introHasAudio !== undefined) {
+        state.introHasAudio = d0.introHasAudio;
+      }
+      if (d0.introClipEnabled !== undefined) {
+        state.introClipEnabled = d0.introClipEnabled;
+        els.introEnableToggle.checked = d0.introClipEnabled;
+        els.introSettings.style.display = d0.introClipEnabled ? 'block' : 'none';
       }
     } catch (_) {}
   }
@@ -1626,6 +1778,18 @@ async function restoreSession() {
     if (data.outputPath) {
       state.outputPath = data.outputPath;
       setFilePicked(els.fpOutput, els.fpOutputText, data.outputPath);
+    }
+    
+    if (data.introClipPath) {
+      try {
+        state.introClipPath = data.introClipPath;
+        setFilePicked(els.fpIntro, els.fpIntroText, data.introClipPath);
+        const { duration, hasAudio } = await window.api.getVideoDuration(data.introClipPath);
+        state.introDurationRaw = duration;
+        state.introHasAudio = hasAudio;
+        els.introDurationText.textContent = formatDuration(duration);
+        els.introDurationDisplay.style.display = 'flex';
+      } catch(e) {}
     }
     
     checkExportReady();

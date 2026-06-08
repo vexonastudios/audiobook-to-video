@@ -8,6 +8,16 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <style>
+    /* Toggle switch for Video Intro panel */
+    .section-header-toggle { display: flex; justify-content: space-between; align-items: center; }
+    .toggle-switch { position: relative; display: inline-block; width: 36px; height: 20px; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--surface-2); transition: .2s; border-radius: 20px; border: 1px solid var(--border); }
+    .toggle-slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 2px; bottom: 2px; background-color: var(--text-muted); transition: .2s; border-radius: 50%; }
+    input:checked + .toggle-slider { background-color: var(--accent); border-color: var(--accent); }
+    input:checked + .toggle-slider:before { transform: translateX(16px); background-color: var(--accent-light); }
+  </style>
   <link rel="icon" type="image/png" href="../assets/icon.png">
 </head>
 <body>
@@ -135,6 +145,57 @@
           <div class="duration-display" id="duration-display" style="display:none">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
             Duration: <span id="duration-text">—</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="section-header-toggle">
+          <h3 class="section-title">3. Video Intro</h3>
+          <label class="toggle-switch">
+            <input type="checkbox" id="intro-enable-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        
+        <div id="intro-settings" style="display:none; margin-top:12px;">
+          <div class="file-input-row">
+            <label class="file-label">Intro MP4 Clip</label>
+            <div class="file-picker" id="fp-intro">
+              <div class="fp-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+              </div>
+              <span class="fp-text" id="fp-intro-text">Choose intro clip…</span>
+              <button class="fp-btn" id="btn-intro">Browse</button>
+            </div>
+            <div class="duration-display" id="intro-duration-display" style="display:none; margin-top:4px;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              Duration: <span id="intro-duration-text">—</span>
+            </div>
+          </div>
+
+          <div class="slider-row" style="margin-top:12px; align-items:center;">
+            <label class="slider-label" style="margin-bottom:0">Include Intro Audio</label>
+            <label class="toggle-switch" style="transform:scale(0.85); transform-origin:right center;">
+              <input type="checkbox" id="intro-audio-toggle" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="slider-row" style="margin-top:12px; align-items:center;">
+            <label class="slider-label" style="margin-bottom:0">Playback Style</label>
+            <select id="intro-style-select" class="transition-select" style="width:140px;">
+              <option value="overlap" selected>Crossfade (Overlap)</option>
+              <option value="push">Sequential (Push)</option>
+            </select>
+          </div>
+
+          <div class="slider-row" id="intro-fade-row" style="margin-top:8px;">
+            <label class="slider-label">
+              <span>Fade into Main Video</span>
+              <span class="slider-value" id="intro-fade-val">1.0s</span>
+            </label>
+            <input type="range" id="intro-fade-slider" min="5" max="30" value="10" class="slider">
           </div>
         </div>
       </div>

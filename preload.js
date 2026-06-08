@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('api', {
   pickBackground: () => ipcRenderer.invoke('pick-background'),
   pickWav: () => ipcRenderer.invoke('pick-wav'),
   pickLogo: () => ipcRenderer.invoke('pick-logo'),
+  pickIntroClip: () => ipcRenderer.invoke('pick-intro-clip'),
   pickOutput: (name) => ipcRenderer.invoke('pick-output', name),
   pickChaptersFile: () => ipcRenderer.invoke('pick-chapters-file'),
 
@@ -26,8 +27,9 @@ contextBridge.exposeInMainWorld('api', {
   extractColor: (imagePath) => ipcRenderer.invoke('extract-color', imagePath),
   processLogo: (opts) => ipcRenderer.invoke('process-logo', opts),
 
-  // Audio
+  // Audio / Video
   getAudioDuration: (wavPath) => ipcRenderer.invoke('get-audio-duration', wavPath),
+  getVideoDuration: (videoPath) => ipcRenderer.invoke('get-video-duration', videoPath),
 
   // GPU info
   getGpuName: () => ipcRenderer.invoke('get-gpu-name'),

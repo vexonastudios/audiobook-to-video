@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('api', {
   minimize: () => ipcRenderer.invoke('window-minimize'),
   maximize: () => ipcRenderer.invoke('window-maximize'),
   close: () => ipcRenderer.invoke('window-close'),
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
 
   // File dialogs
   pickCover: () => ipcRenderer.invoke('pick-cover'),

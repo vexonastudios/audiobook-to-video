@@ -78,6 +78,15 @@ autoUpdater.on('error', (err) => {
   console.error('Error in auto-updater.', err);
 });
 
+ipcMain.handle('check-for-updates', async () => {
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    return !!result.downloadPromise;
+  } catch (e) {
+    return false;
+  }
+});
+
 // App lifecycle
 app.whenReady().then(() => {
   createMainWindow();

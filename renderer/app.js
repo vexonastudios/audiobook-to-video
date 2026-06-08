@@ -74,6 +74,7 @@ const els = {
   btnNewProject: $('btn-new-project'),
   btnSaveProject: $('btn-save-project'),
   btnLoadProject: $('btn-load-project'),
+  btnUpdate: $('btn-update'),
 
   // File pickers
   fpCoverText: $('fp-cover-text'),
@@ -324,6 +325,22 @@ els.btnCloseTutorial.addEventListener('click', () => {
 });
 els.tutorialModal.addEventListener('click', (e) => {
   if (e.target === els.tutorialModal) els.tutorialModal.classList.add('hidden');
+});
+
+els.btnUpdate.addEventListener('click', async () => {
+  els.btnUpdate.disabled = true;
+  els.btnUpdate.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-3.25-3.25"/></svg> Checking...`;
+  try {
+    const res = await window.api.checkForUpdates();
+    if (!res) {
+      alert("You are on the latest version.");
+    }
+  } catch (e) {
+    console.error("Update check failed", e);
+  } finally {
+    els.btnUpdate.disabled = false;
+    els.btnUpdate.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-3.25-3.25"/></svg> Update App`;
+  }
 });
 
 els.btnLoadProject.addEventListener('click', async () => {

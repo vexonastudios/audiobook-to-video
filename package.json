@@ -1,6 +1,6 @@
 {
   "name": "audiobook-video-generator",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Audiobook to Video by Bodee Books",
   "main": "main.js",
   "scripts": {

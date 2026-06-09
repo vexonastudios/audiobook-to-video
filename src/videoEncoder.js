@@ -449,6 +449,7 @@ async function renderVideo(params, callbacks) {
           ...mapArgs,
           ...encodeArgs,
           ...introAudioCodecArgs,
+          '-r', String(OUTPUT_FPS),
           '-video_track_timescale', '90000',
           '-y', normalizedIntro
         ], isCancelled);
@@ -568,6 +569,7 @@ function encodeSegment({ imagePath, outputPath, duration, fps, crf, useGPU, code
       '-cq', String(crf),
       '-pix_fmt', 'yuv420p',
       '-r', String(fps),
+      '-video_track_timescale', '90000',
       '-an', '-y', outputPath
     ], isCancelled);
   }
@@ -583,6 +585,7 @@ function encodeSegment({ imagePath, outputPath, duration, fps, crf, useGPU, code
     '-crf', String(crf),
     '-pix_fmt', 'yuv420p',
     '-r', String(fps),
+    '-video_track_timescale', '90000',
     '-an', '-y', outputPath
   ], isCancelled);
 }
@@ -606,6 +609,7 @@ function encodeFrameSequence({ frameDir, outputPath, fps, duration, crf, useGPU,
       '-cq', String(crf),
       '-pix_fmt', 'yuv420p',
       '-r', String(fps),
+      '-video_track_timescale', '90000',
       '-an', '-y', outputPath
     ], isCancelled);
   }
@@ -620,6 +624,7 @@ function encodeFrameSequence({ frameDir, outputPath, fps, duration, crf, useGPU,
     '-crf', String(crf),
     '-pix_fmt', 'yuv420p',
     '-r', String(fps),
+    '-video_track_timescale', '90000',
     '-an', '-y', outputPath
   ], isCancelled);
 }

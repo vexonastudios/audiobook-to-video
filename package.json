@@ -1,6 +1,6 @@
 {
   "name": "audiobook-video-generator",
-  "version": "1.1.13",
+  "version": "1.1.14",
   "description": "Audiobook to Video by Vexona Studios",
   "main": "main.js",
   "scripts": {

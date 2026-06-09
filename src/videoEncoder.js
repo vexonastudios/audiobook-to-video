@@ -374,15 +374,29 @@ async function renderVideo(params, callbacks) {
       ];
 
       if (introStyle === 'overlap') {
-        await runFFmpeg([
-          '-i', introClipPath,
-          '-i', muxedTempPath,
-          ...filterArgs,
-          ...encodeArgs,
-          '-ar', '44100',
-          '-video_track_timescale', '90000',
-          '-y', outputPath
-        ], isCancelled);
+        const totalOverlapDuration = introData.duration + totalDuration - introFadeDuration;
+        onLog(`   - Re-encoding entire video with intro crossfade (${formatSec(totalOverlapDuration)})...`);
+        await runFFmpegWithProgress({
+          args: [
+            '-i', introClipPath,
+            '-i', muxedTempPath,
+            ...filterArgs,
+            ...encodeArgs,
+            '-ar', '44100',
+            '-video_track_timescale', '90000',
+            '-y', outputPath
+          ],
+          totalDuration: totalOverlapDuration,
+          isCancelled,
+          onProgress: (sec) => {
+            const pct = 98 + Math.round((sec / totalOverlapDuration) * 1.9);
+            onProgress({
+              phase: 'encoding',
+              percent: Math.min(99, pct),
+              label: `Encoding crossfade: ${formatSec(sec)} / ${formatSec(totalOverlapDuration)}`
+            });
+          }
+        });
       } else {
         // Sequential / Push style using instant concat demuxer!
         // 1. Normalize intro to exactly match muxedTempPath

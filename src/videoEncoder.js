@@ -66,7 +66,9 @@ async function renderVideo(params, callbacks) {
     introStyle = 'push',
     introFadeDuration = 1.0,
     codec = 'h264',   // 'h264' = h264_nvenc/libx264 | 'h265' = hevc_nvenc/libx265
-    fastAudioCopy = true
+    fastAudioCopy = true,
+    titleFontSize = 0,
+    bgOffsetY = 0
   } = params;
 
   const { onProgress, onLog, renderFrame, isCancelled = () => false } = callbacks;
@@ -108,11 +110,13 @@ async function renderVideo(params, callbacks) {
         coverDataURL,
         bgDataURL: bgDataURL || coverDataURL,
         blurAmount, bgOpacity,
+        bgOffsetY,
         chapter: ch,
         blendAlpha: 0,
         nextChapter: null,
         accentColor, logoDataURL,
-        coverBorderWidth
+        coverBorderWidth,
+        titleFontSize
       });
 
       if (!dataURL) throw new Error(`Frame render returned null for chapter ${i}`);
@@ -506,9 +510,11 @@ function buildTransitionFrameParams({ params, chapterA, chapterB, alpha, transit
     bgDataURL: params.bgDataURL,
     blurAmount: params.blurAmount,
     bgOpacity: params.bgOpacity,
+    bgOffsetY: params.bgOffsetY,
     accentColor: params.accentColor,
     logoDataURL: params.logoDataURL,
-    coverBorderWidth: params.coverBorderWidth
+    coverBorderWidth: params.coverBorderWidth,
+    titleFontSize: params.titleFontSize
   };
 
   switch (transitionStyle) {

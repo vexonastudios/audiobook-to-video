@@ -1455,6 +1455,7 @@ async function beginRender() {
     bgOpacity: state.bgOpacity,
     bgOffsetY: state.bgOffsetY,
     coverBorderWidth: state.coverBorderWidth,
+    titleFontSize: state.titleFontSize,
     accentColor: state.accentColor,
     logoDataURL: state.logoProcessedDataURL || state.logoDataURL || null,
     transitionStyle: state.transitionStyle,

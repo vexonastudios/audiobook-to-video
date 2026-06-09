@@ -63,7 +63,7 @@ async function renderVideo(params, callbacks) {
     transitionDuration = 1.0,
     introClipPath = null,
     introAudioEnabled = true,
-    introStyle = 'overlap',
+    introStyle = 'push',
     introFadeDuration = 1.0,
     codec = 'h264'   // 'h264' = h264_nvenc/libx264 | 'h265' = hevc_nvenc/libx265
   } = params;
@@ -259,7 +259,7 @@ async function renderVideo(params, callbacks) {
     
     const ext = path.extname(wavPath).toLowerCase();
     const hasIntro = !!introClipPath;
-    const isSequentialIntro = hasIntro && introStyle === 'sequential';
+    const isSequentialIntro = hasIntro && introStyle === 'push';
     
     // If we are doing a sequential intro, we MUST force a unified sample rate (44100) 
     // and re-encode to AAC so the concat demuxer doesn't fail later.
@@ -393,6 +393,7 @@ async function renderVideo(params, callbacks) {
         const mapArgs = useAudio ? ['-map', '[v]', '-map', '0:a'] : ['-map', '[v]', '-map', '[a]'];
 
         onLog('   - Normalizing intro clip parameters...');
+        onProgress({ phase: 'encoding', percent: 98, label: 'Normalizing intro clip...' });
         await runFFmpeg([
           '-i', introClipPath,
           '-filter_complex', normalizeFilter,
@@ -405,6 +406,7 @@ async function renderVideo(params, callbacks) {
 
         // 2. Concat demux normalized intro with main video instantly
         onLog('   - Instantly concatenating intro and audiobook...');
+        onProgress({ phase: 'encoding', percent: 99, label: 'Concatenating intro and audiobook...' });
         const introConcatListPath = path.join(tmpDir, 'intro_concat_list.txt');
         require('fs').writeFileSync(introConcatListPath, `file '${normalizedIntro.replace(/\\/g, '/')}'\nfile '${muxedTempPath.replace(/\\/g, '/')}'`, 'utf8');
 

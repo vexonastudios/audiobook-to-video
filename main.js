@@ -71,6 +71,12 @@ autoUpdater.on('error', (err) => {
   console.error('Error in auto-updater.', err);
 });
 
+autoUpdater.on('download-progress', (progressObj) => {
+  if (mainWindow) {
+    mainWindow.webContents.send('update-download-progress', progressObj.percent);
+  }
+});
+
 autoUpdater.on('update-available', (info) => {
   if (mainWindow) {
     mainWindow.webContents.send('update-available', info.version);

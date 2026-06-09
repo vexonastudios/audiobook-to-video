@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('api', {
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   installUpdate: () => ipcRenderer.send('install-update'),
   onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (e, version) => callback(version)),
+  onUpdateDownloadProgress: (callback) => ipcRenderer.on('update-download-progress', (e, percent) => callback(percent)),
   onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (e, version) => callback(version)),
 
   // File dialogs

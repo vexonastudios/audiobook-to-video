@@ -42,7 +42,7 @@ const state = {
   introClipPath: null,
   introClipEnabled: false,
   introAudioEnabled: true,
-  introStyle: 'overlap',     // 'overlap' | 'push'
+  introStyle: 'push',     // 'overlap' | 'push'
   introFadeDuration: 1.0,
   introHasAudio: false,
   introDurationRaw: 0,       // exact probed duration
@@ -238,7 +238,7 @@ els.btnNewProject.addEventListener('click', () => {
       introClipPath: null,
       introClipEnabled: false,
       introAudioEnabled: true,
-      introStyle: 'overlap',
+      introStyle: 'push',
       introFadeDuration: 1.0,
       introHasAudio: false,
       introDurationRaw: 0,
@@ -284,8 +284,8 @@ els.btnNewProject.addEventListener('click', () => {
     els.introEnableToggle.checked = false;
     els.introSettings.style.display = 'none';
     els.introAudioToggle.checked = true;
-    els.introStyleSelect.value = 'overlap';
-    els.introFadeRow.style.display = 'flex';
+    els.introStyleSelect.value = 'push';
+    els.introFadeRow.style.display = 'none';
     els.introFadeSlider.value = 10;
     els.introFadeVal.textContent = '1.0s';
 
@@ -363,8 +363,17 @@ els.btnUpdate.addEventListener('click', async () => {
 });
 
 // Update Modal Logic
+let updateVersion = '';
+
 window.api.onUpdateAvailable((version) => {
+  updateVersion = version;
   els.btnUpdate.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-3.25-3.25"/></svg> Downloading v${version}...`;
+});
+
+window.api.onUpdateDownloadProgress((percent) => {
+  const rounded = Math.round(percent);
+  const verSuffix = updateVersion ? ` v${updateVersion}` : '';
+  els.btnUpdate.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-3.25-3.25"/></svg> Downloading${verSuffix} (${rounded}%)...`;
 });
 
 window.api.onUpdateDownloaded((version) => {

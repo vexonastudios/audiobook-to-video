@@ -1536,7 +1536,7 @@ function buildYouTubeChapters() {
   const chs = state.chapters;
   if (!chs || chs.length === 0) return null;
 
-  const offset = state.introDuration || 0;
+  const offset = state.introClipEnabled ? (state.introDuration || 0) : 0;
   const lines = [];
 
   if (offset > 0) {

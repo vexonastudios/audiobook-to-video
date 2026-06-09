@@ -1015,6 +1015,7 @@ function parseSrtToChapters(srtText) {
 
     entries.push({ startSec: chapterStartSec, number, title, dateRange });
     accumulatedText = '';
+    collecting = false;
   };
 
   let lastEndSec = 0;
@@ -1045,9 +1046,15 @@ function parseSrtToChapters(srtText) {
         ? rawText.replace(/<break.*/gi, '').trim()
         : rawText;
 
+      const isCompleteTitle = 
+        /[-–—:]/.test(stripped) || 
+        stripped.includes('\n') || 
+        /^[\[\(]?(?:(?:the\s+)?(?:author['']s|editor['']s)\s+)?(?:preface|introduction)[\]\).:\s]*$/i.test(stripped) ||
+        stripped.length > 40;
+
       // If the file doesn't use <break> tags, we assume the chapter title is 
       // just this single block. Flush it immediately so we don't grab body text.
-      if (hasBreak || !hasAnyBreaks) {
+      if (hasBreak || !hasAnyBreaks || isCompleteTitle) {
         flushChapter();
       }
     } else if (collecting) {
@@ -1063,6 +1070,10 @@ function parseSrtToChapters(srtText) {
           flushChapter();
         } else {
           accumulatedText += ' ' + rawText;
+          // Safety net: if the title gets suspiciously long, we've likely bled into body text
+          if (accumulatedText.length > 120) {
+            flushChapter();
+          }
         }
       }
     }

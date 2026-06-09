@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('api', {
   maximize: () => ipcRenderer.invoke('window-maximize'),
   close: () => ipcRenderer.invoke('window-close'),
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  installUpdate: () => ipcRenderer.send('install-update'),
+  onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (e, version) => callback(version)),
 
   // File dialogs
   pickCover: () => ipcRenderer.invoke('pick-cover'),

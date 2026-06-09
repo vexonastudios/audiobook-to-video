@@ -24,11 +24,17 @@
 
   <!-- Custom Title Bar -->
   <div class="titlebar" id="titlebar">
-    <div class="titlebar-drag">
+    <div class="titlebar-drag" style="flex:1">
       <div class="titlebar-logo">
         <img src="../assets/icon.png" alt="Logo" style="width: 18px; height: 18px; object-fit: contain;">
       </div>
       <span class="titlebar-title">Audiobook to Video by Vexona Studios</span>
+    </div>
+    <div class="titlebar-actions" style="margin-right: 16px; display:flex; align-items:center; -webkit-app-region: no-drag;">
+      <button id="btn-update" title="Check for Updates" style="background:var(--surface-2); color:var(--text); border:1px solid var(--border); padding:4px 12px; border-radius:4px; font-size:12px; font-weight:500; cursor:pointer; display:flex; align-items:center; gap:6px; transition:0.2s;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-3.25-3.25"/></svg>
+        Check for Updates
+      </button>
     </div>
     <div class="titlebar-controls">
       <button class="tb-btn" id="btn-minimize" title="Minimize">
@@ -69,10 +75,6 @@
           <button class="project-btn" id="btn-tutorial" style="background:var(--accent-glow);color:var(--accent-light);border-color:var(--accent)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             Tutorial
-          </button>
-          <button class="project-btn" id="btn-update" style="background:var(--surface-2);color:var(--text);border-color:var(--border)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-3.25-3.25"/></svg>
-            Update App
           </button>
         </div>
       </div>
@@ -431,19 +433,6 @@
       <div class="modal-body tutorial-body">
         <p>This tool turns your audiobook audio files and book cover into an engaging, animated YouTube video. Follow these steps to get started:</p>
         
-        <h3>1. Set Output Destination</h3>
-        <p>Always start by choosing where to save your final <code>.mp4</code> video file in the <strong>Output Destination</strong> section.</p>
-
-        <h3>2. Add Your Book Assets</h3>
-        <ul>
-          <li><strong>Cover Image:</strong> Select the book's cover art. The app will automatically extract the dominant accent color to tint your UI and text!</li>
-          <li><strong>Background Image:</strong> Optional. Leave it blank to use a dynamic, blurred version of your cover.</li>
-          <li><strong>Brand Logo:</strong> Add your publisher or series logo. The app builds a library of your logos and automatically tints the active one to match the cover's accent color.</li>
-          <li><strong>Audio File:</strong> Select the full WAV, MP3, or M4A audiobook file. The app will calculate the total duration.</li>
-        </ul>
-
-        <h3>3. Define Chapters (Right Panel)</h3>
-        <p>You need chapter markers to tell the app when to transition. You can type them manually, import a text file, or import an SRT subtitle file.</p>
         <div class="code-block">
           (0:00) Introduction<br>
           (1:45) 1 - The Journey Begins<br>

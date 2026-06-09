@@ -63,19 +63,16 @@ autoUpdater.on('update-available', (info) => {
 });
 autoUpdater.on('update-downloaded', (info) => {
   console.log('Update downloaded.', info);
-  dialog.showMessageBox({
-    type: 'info',
-    title: 'Update Ready',
-    message: 'A new version of Audiobook to Video has been downloaded. Restart the application to apply the update.',
-    buttons: ['Restart', 'Later']
-  }).then((result) => {
-    if (result.response === 0) {
-      autoUpdater.quitAndInstall();
-    }
-  });
+  if (mainWindow) {
+    mainWindow.webContents.send('update-downloaded', info.version);
+  }
 });
 autoUpdater.on('error', (err) => {
   console.error('Error in auto-updater.', err);
+});
+
+ipcMain.on('install-update', () => {
+  autoUpdater.quitAndInstall();
 });
 
 ipcMain.handle('check-for-updates', async () => {

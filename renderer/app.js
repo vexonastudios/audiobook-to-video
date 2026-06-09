@@ -176,10 +176,13 @@ const els = {
   chaptersCount: $('chapters-count'),
   chaptersTotalDur: $('chapters-total-dur'),
 
-  // Tutorial
+  updateModal: $('update-modal'),
+  btnUpdateLater: $('btn-update-later'),
+  btnUpdateNow: $('btn-update-now'),
+  updateVersionText: $('update-version-text'),
+  tutorialModal: $('tutorial-modal'),
   btnTutorial: $('btn-tutorial'),
   btnCloseTutorial: $('btn-close-tutorial'),
-  tutorialModal: $('tutorial-modal'),
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -329,7 +332,7 @@ els.tutorialModal.addEventListener('click', (e) => {
 
 els.btnUpdate.addEventListener('click', async () => {
   els.btnUpdate.disabled = true;
-  els.btnUpdate.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-3.25-3.25"/></svg> Checking...`;
+  els.btnUpdate.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-3.25-3.25"/></svg> Checking...`;
   try {
     const res = await window.api.checkForUpdates();
     if (!res) {
@@ -339,8 +342,24 @@ els.btnUpdate.addEventListener('click', async () => {
     console.error("Update check failed", e);
   } finally {
     els.btnUpdate.disabled = false;
-    els.btnUpdate.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-3.25-3.25"/></svg> Update App`;
+    els.btnUpdate.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-3.25-3.25"/></svg> Check for Updates`;
   }
+});
+
+// Update Modal Logic
+window.api.onUpdateDownloaded((version) => {
+  els.updateVersionText.textContent = version ? `(${version})` : '';
+  els.updateModal.classList.remove('hidden');
+});
+
+els.btnUpdateLater.addEventListener('click', () => {
+  els.updateModal.classList.add('hidden');
+});
+
+els.btnUpdateNow.addEventListener('click', () => {
+  els.btnUpdateNow.disabled = true;
+  els.btnUpdateNow.textContent = "Restarting...";
+  window.api.installUpdate();
 });
 
 els.btnLoadProject.addEventListener('click', async () => {

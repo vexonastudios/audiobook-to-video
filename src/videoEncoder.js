@@ -3,8 +3,11 @@ const fs = require('fs');
 const os = require('os');
 const { spawn } = require('child_process');
 const fluent = require('fluent-ffmpeg');
-const ffmpegPath = require('ffmpeg-static');
-const ffprobePath = require('@ffprobe-installer/ffprobe').path;
+let ffmpegPath = require('ffmpeg-static');
+let ffprobePath = require('@ffprobe-installer/ffprobe').path;
+
+ffmpegPath = ffmpegPath.replace('app.asar', 'app.asar.unpacked');
+ffprobePath = ffprobePath.replace('app.asar', 'app.asar.unpacked');
 
 fluent.setFfmpegPath(ffmpegPath);
 fluent.setFfprobePath(ffprobePath);

@@ -937,18 +937,22 @@ function parseSrtToChapters(srtText) {
     const tcLine = lines.find(l => l.includes('-->'));
     if (!tcLine) continue;
 
-    const tcMatch = tcLine.match(/(\d+):(\d+):(\d+)[,\.](\d+)/);
-    if (!tcMatch) continue;
+    const tcParts = tcLine.match(/(\d+):(\d+):(\d+)/g);
+    if (!tcParts || tcParts.length < 1) continue;
 
-    const startSec = parseInt(tcMatch[1]) * 3600
-                   + parseInt(tcMatch[2]) * 60
-                   + parseInt(tcMatch[3]);
+    const parseTime = (str) => {
+      const parts = str.split(':');
+      return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseInt(parts[2]);
+    };
+
+    const startSec = parseTime(tcParts[0]);
+    const endSec = tcParts.length > 1 ? parseTime(tcParts[1]) : startSec + 5;
 
     // Text lines = everything that isn't the index number or timecode
     const textLines = lines.filter(l => !l.includes('-->') && !/^\d+$/.test(l));
     const rawText = textLines.join(' ');
 
-    rawBlocks.push({ startSec, rawText });
+    rawBlocks.push({ startSec, endSec, rawText });
   }
 
   // ── Pass 2: Walk blocks, accumulating chapter titles across blocks ──────
@@ -1013,8 +1017,11 @@ function parseSrtToChapters(srtText) {
     accumulatedText = '';
   };
 
-  for (const { startSec, rawText } of rawBlocks) {
+  let lastEndSec = 0;
+
+  for (const { startSec, endSec, rawText } of rawBlocks) {
     const hasBreak = /<break/i.test(rawText);
+    const timeGap = startSec - lastEndSec;
 
     // Check if this block starts a chapter heading (strip tags first)
     const stripped = rawText
@@ -1044,15 +1051,23 @@ function parseSrtToChapters(srtText) {
         flushChapter();
       }
     } else if (collecting) {
-      // Mid-collection: keep appending until we hit a <break block
-      if (hasBreak) {
-        const beforeBreak = rawText.replace(/<break.*/gi, '').trim();
-        if (beforeBreak) accumulatedText += ' ' + beforeBreak;
+      // If there is a noticeable time gap (>2 seconds) between blocks, 
+      // it's definitely body text, not a continuation of the chapter title.
+      if (timeGap > 2) {
         flushChapter();
       } else {
-        accumulatedText += ' ' + rawText;
+        // Mid-collection: keep appending until we hit a <break block
+        if (hasBreak) {
+          const beforeBreak = rawText.replace(/<break.*/gi, '').trim();
+          if (beforeBreak) accumulatedText += ' ' + beforeBreak;
+          flushChapter();
+        } else {
+          accumulatedText += ' ' + rawText;
+        }
       }
     }
+    
+    lastEndSec = endSec;
   }
 
   // Flush any open collection at EOF

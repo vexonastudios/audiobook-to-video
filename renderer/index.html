@@ -17,6 +17,8 @@
     .toggle-slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 2px; bottom: 2px; background-color: var(--text-muted); transition: .2s; border-radius: 50%; }
     input:checked + .toggle-slider { background-color: var(--accent); border-color: var(--accent); }
     input:checked + .toggle-slider:before { transform: translateX(16px); background-color: var(--accent-light); }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    .spin { animation: spin 1s linear infinite; }
   </style>
   <link rel="icon" type="image/png" href="../assets/icon.png">
 </head>

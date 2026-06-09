@@ -71,6 +71,12 @@ autoUpdater.on('error', (err) => {
   console.error('Error in auto-updater.', err);
 });
 
+autoUpdater.on('update-available', (info) => {
+  if (mainWindow) {
+    mainWindow.webContents.send('update-available', info.version);
+  }
+});
+
 ipcMain.on('install-update', () => {
   autoUpdater.quitAndInstall();
 });

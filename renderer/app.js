@@ -363,6 +363,10 @@ els.btnUpdate.addEventListener('click', async () => {
 });
 
 // Update Modal Logic
+window.api.onUpdateAvailable((version) => {
+  els.btnUpdate.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-3.25-3.25"/></svg> Downloading v${version}...`;
+});
+
 window.api.onUpdateDownloaded((version) => {
   els.updateVersionText.textContent = version ? `(${version})` : '';
   els.updateModal.classList.remove('hidden');

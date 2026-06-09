@@ -258,12 +258,16 @@ async function renderVideo(params, callbacks) {
     const totalDuration = chapters[chapters.length - 1].endTime;
     
     const ext = path.extname(wavPath).toLowerCase();
-    const canCopyAudio = ['.mp3', '.m4a', '.aac'].includes(ext);
+    const hasIntro = !!introClipPath;
+    const isSequentialIntro = hasIntro && introStyle === 'sequential';
+    
+    // If we are doing a sequential intro, we MUST force a unified sample rate (44100) 
+    // and re-encode to AAC so the concat demuxer doesn't fail later.
+    const canCopyAudio = !isSequentialIntro && ['.mp3', '.m4a', '.aac'].includes(ext);
     const audioCodecArgs = canCopyAudio 
       ? ['-c:a', 'copy'] 
-      : ['-c:a', 'aac', '-b:a', '192k'];
+      : ['-c:a', 'aac', '-b:a', '192k', '-ar', '44100'];
 
-    const hasIntro = !!introClipPath;
     const muxedTempPath = hasIntro ? path.join(tmpDir, 'muxed_temp.mp4') : outputPath;
 
     await runFFmpegWithProgress({
@@ -369,13 +373,48 @@ async function renderVideo(params, callbacks) {
         '-c:a', 'aac', '-b:a', '192k'
       ];
 
-      await runFFmpeg([
-        '-i', introClipPath,
-        '-i', muxedTempPath,
-        ...filterArgs,
-        ...encodeArgs,
-        '-y', outputPath
-      ], isCancelled);
+      if (introStyle === 'overlap') {
+        await runFFmpeg([
+          '-i', introClipPath,
+          '-i', muxedTempPath,
+          ...filterArgs,
+          ...encodeArgs,
+          '-ar', '44100',
+          '-video_track_timescale', '90000',
+          '-y', outputPath
+        ], isCancelled);
+      } else {
+        // Sequential / Push style using instant concat demuxer!
+        // 1. Normalize intro to exactly match muxedTempPath
+        const normalizedIntro = path.join(tmpDir, 'intro_normalized.mp4');
+        const normalizeFilter = useAudio
+          ? `[0:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS}[v]`
+          : `[0:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS}[v]; anullsrc=d=${introData.duration}:r=44100[a]`;
+        const mapArgs = useAudio ? ['-map', '[v]', '-map', '0:a'] : ['-map', '[v]', '-map', '[a]'];
+
+        onLog('   - Normalizing intro clip parameters...');
+        await runFFmpeg([
+          '-i', introClipPath,
+          '-filter_complex', normalizeFilter,
+          ...mapArgs,
+          ...encodeArgs,
+          '-ar', '44100',
+          '-video_track_timescale', '90000',
+          '-y', normalizedIntro
+        ], isCancelled);
+
+        // 2. Concat demux normalized intro with main video instantly
+        onLog('   - Instantly concatenating intro and audiobook...');
+        const introConcatListPath = path.join(tmpDir, 'intro_concat_list.txt');
+        require('fs').writeFileSync(introConcatListPath, `file '${normalizedIntro.replace(/\\/g, '/')}'\nfile '${muxedTempPath.replace(/\\/g, '/')}'`, 'utf8');
+
+        await runFFmpeg([
+          '-f', 'concat', '-safe', '0',
+          '-i', introConcatListPath,
+          '-c', 'copy',
+          '-y', outputPath
+        ], isCancelled);
+      }
     }
 
     onLog('\n✅ Video export complete!');

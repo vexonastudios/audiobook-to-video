@@ -30,8 +30,8 @@
       </div>
       <span class="titlebar-title">Audiobook to Video by Vexona Studios</span>
     </div>
-    <div class="titlebar-actions" style="margin-right: 16px; display:flex; align-items:center; -webkit-app-region: no-drag;">
-      <button id="btn-update" title="Check for Updates" style="background:var(--surface-2); color:var(--text); border:1px solid var(--border); padding:4px 12px; border-radius:4px; font-size:12px; font-weight:500; cursor:pointer; display:flex; align-items:center; gap:6px; transition:0.2s;">
+    <div class="titlebar-actions" style="margin-right: 16px; display:flex; align-items:center;">
+      <button id="btn-update" title="Check for Updates" style="background:var(--surface-2); color:var(--text); border:1px solid var(--border); padding:4px 12px; border-radius:4px; font-size:12px; font-weight:500; cursor:pointer; display:flex; align-items:center; gap:6px; transition:0.2s; -webkit-app-region: no-drag;">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-3.25-3.25"/></svg>
         Check for Updates
       </button>
@@ -461,6 +461,16 @@
       <div style="display: flex; gap: 12px; justify-content: center;">
         <button class="project-btn" id="btn-update-later" style="flex:1;">Later</button>
         <button class="project-btn" id="btn-update-now" style="flex:1; background: var(--accent); color: var(--accent-light); border-color: var(--accent);">Restart & Install</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="alert-modal" style="z-index: 10000;">
+    <div class="modal-content" style="max-width: 400px; text-align: center; padding: 32px;">
+      <h2 style="margin-bottom: 12px;" id="alert-title">Notice</h2>
+      <p style="color: var(--text-muted); margin-bottom: 24px; font-size: 14px; line-height: 1.5;" id="alert-message"></p>
+      <div style="display: flex; justify-content: center;">
+        <button class="project-btn" id="btn-alert-ok" style="background: var(--accent); color: var(--accent-light); border-color: var(--accent); padding-left: 32px; padding-right: 32px;">OK</button>
       </div>
     </div>
   </div>

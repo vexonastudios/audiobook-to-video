@@ -183,7 +183,22 @@ const els = {
   tutorialModal: $('tutorial-modal'),
   btnTutorial: $('btn-tutorial'),
   btnCloseTutorial: $('btn-close-tutorial'),
+
+  alertModal: $('alert-modal'),
+  alertTitle: $('alert-title'),
+  alertMessage: $('alert-message'),
+  btnAlertOk: $('btn-alert-ok'),
 };
+
+function showAlert(title, message) {
+  els.alertTitle.textContent = title;
+  els.alertMessage.textContent = message;
+  els.alertModal.classList.remove('hidden');
+}
+
+els.btnAlertOk.addEventListener('click', () => {
+  els.alertModal.classList.add('hidden');
+});
 
 // ─────────────────────────────────────────────────────────────
 // Titlebar
@@ -336,10 +351,11 @@ els.btnUpdate.addEventListener('click', async () => {
   try {
     const res = await window.api.checkForUpdates();
     if (!res) {
-      alert("You are on the latest version.");
+      showAlert("Up to Date", "You are already running the latest version of Audiobook to Video!");
     }
   } catch (e) {
     console.error("Update check failed", e);
+    showAlert("Update Check Failed", "Could not connect to the update server. Please check your internet connection.");
   } finally {
     els.btnUpdate.disabled = false;
     els.btnUpdate.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-3.25-3.25"/></svg> Check for Updates`;

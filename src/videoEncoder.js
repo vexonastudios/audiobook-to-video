@@ -261,12 +261,9 @@ async function renderVideo(params, callbacks) {
     const hasIntro = !!introClipPath;
     const isSequentialIntro = hasIntro && introStyle === 'push';
     
-    // If we are doing a sequential intro, we MUST force a unified sample rate (44100) 
-    // and re-encode to AAC so the concat demuxer doesn't fail later.
-    const canCopyAudio = !isSequentialIntro && ['.mp3', '.m4a', '.aac'].includes(ext);
-    const audioCodecArgs = canCopyAudio 
-      ? ['-c:a', 'copy'] 
-      : ['-c:a', 'aac', '-b:a', '192k', '-ar', '44100'];
+    // Always encode to AAC at 44100Hz for maximum player compatibility (e.g. Windows Media Player, QuickTime)
+    const canCopyAudio = false;
+    const audioCodecArgs = ['-c:a', 'aac', '-b:a', '192k', '-ar', '44100'];
 
     const muxedTempPath = hasIntro ? path.join(tmpDir, 'muxed_temp.mp4') : outputPath;
 

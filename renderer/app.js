@@ -875,7 +875,7 @@ function toTitleCase(str) {
   const smalls = new Set(['a','an','the','and','but','or','for','nor','on','at','to','of','in','by','up']);
   return str
     .toLowerCase()
-    .replace(/[^\s-]+/g, (word, offset) => {
+    .replace(/[^\s\-\u2013\u2014]+/g, (word, offset) => {
       const bare = word.replace(/^[^a-z]+|[^a-z]+$/gi, '');
       if (offset === 0 || !smalls.has(bare)) {
         return word.charAt(0).toUpperCase() + word.slice(1);

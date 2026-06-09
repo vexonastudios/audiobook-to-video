@@ -65,7 +65,8 @@ async function renderVideo(params, callbacks) {
     introAudioEnabled = true,
     introStyle = 'push',
     introFadeDuration = 1.0,
-    codec = 'h264'   // 'h264' = h264_nvenc/libx264 | 'h265' = hevc_nvenc/libx265
+    codec = 'h264',   // 'h264' = h264_nvenc/libx264 | 'h265' = hevc_nvenc/libx265
+    fastAudioCopy = true
   } = params;
 
   const { onProgress, onLog, renderFrame, isCancelled = () => false } = callbacks;
@@ -260,10 +261,15 @@ async function renderVideo(params, callbacks) {
     const ext = path.extname(wavPath).toLowerCase();
     const hasIntro = !!introClipPath;
     const isSequentialIntro = hasIntro && introStyle === 'push';
-    
-    // Always encode to AAC at 44100Hz for maximum player compatibility (e.g. Windows Media Player, QuickTime)
-    const canCopyAudio = false;
-    const audioCodecArgs = ['-c:a', 'aac', '-b:a', '192k', '-ar', '44100'];
+
+    // Check if we can and want to copy audio
+    const audioDetails = await getAudioDetails(wavPath);
+    const isCopyableFormat = ['.mp3', '.m4a', '.aac'].includes(ext) || ['mp3', 'aac', 'm4a'].includes(audioDetails.codec);
+    const useAudioCopy = fastAudioCopy && isCopyableFormat;
+
+    const audioCodecArgs = useAudioCopy 
+      ? ['-c:a', 'copy'] 
+      : ['-c:a', 'aac', '-b:a', '192k', '-ar', '44100'];
 
     const muxedTempPath = hasIntro ? path.join(tmpDir, 'muxed_temp.mp4') : outputPath;
 
@@ -398,10 +404,42 @@ async function renderVideo(params, callbacks) {
         // Sequential / Push style using instant concat demuxer!
         // 1. Normalize intro to exactly match muxedTempPath
         const normalizedIntro = path.join(tmpDir, 'intro_normalized.mp4');
-        const normalizeFilter = useAudio
-          ? `[0:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS}[v]`
-          : `[0:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS}[v]; anullsrc=d=${introData.duration}:r=44100[a]`;
-        const mapArgs = useAudio ? ['-map', '[v]', '-map', '0:a'] : ['-map', '[v]', '-map', '[a]'];
+        
+        let introAudioCodecArgs = [];
+        let normalizeFilter;
+        let mapArgs;
+
+        if (useAudio) {
+          normalizeFilter = `[0:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS}[v]`;
+          mapArgs = ['-map', '[v]', '-map', '0:a'];
+          if (useAudioCopy && audioDetails.codec) {
+            // Match the audiobook's audio properties
+            const targetCodec = audioDetails.codec === 'mp3' ? 'libmp3lame' : 'aac';
+            introAudioCodecArgs = [
+              '-c:a', targetCodec,
+              '-b:a', '192k',
+              '-ar', String(audioDetails.sampleRate || 44100),
+              '-ac', String(audioDetails.channels || 2)
+            ];
+          } else {
+            introAudioCodecArgs = ['-c:a', 'aac', '-b:a', '192k', '-ar', '44100'];
+          }
+        } else {
+          const sampleRate = (useAudioCopy && audioDetails.sampleRate) ? audioDetails.sampleRate : 44100;
+          normalizeFilter = `[0:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS}[v]; anullsrc=d=${introData.duration}:r=${sampleRate}[a]`;
+          mapArgs = ['-map', '[v]', '-map', '[a]'];
+          if (useAudioCopy && audioDetails.codec) {
+            const targetCodec = audioDetails.codec === 'mp3' ? 'libmp3lame' : 'aac';
+            introAudioCodecArgs = [
+              '-c:a', targetCodec,
+              '-b:a', '192k',
+              '-ar', String(sampleRate),
+              '-ac', String(audioDetails.channels || 2)
+            ];
+          } else {
+            introAudioCodecArgs = ['-c:a', 'aac', '-b:a', '192k', '-ar', '44100'];
+          }
+        }
 
         onLog('   - Normalizing intro clip parameters...');
         onProgress({ phase: 'encoding', percent: 98, label: 'Normalizing intro clip...' });
@@ -410,7 +448,7 @@ async function renderVideo(params, callbacks) {
           '-filter_complex', normalizeFilter,
           ...mapArgs,
           ...encodeArgs,
-          '-ar', '44100',
+          ...introAudioCodecArgs,
           '-video_track_timescale', '90000',
           '-y', normalizedIntro
         ], isCancelled);
@@ -678,13 +716,26 @@ function formatSec(sec) {
     : `${m}:${String(s).padStart(2, '0')}`;
 }
 
-function getAudioDuration(wavPath) {
+function getAudioDetails(wavPath) {
   return new Promise((resolve, reject) => {
     fluent.ffprobe(wavPath, (err, metadata) => {
       if (err) reject(new Error(err.message));
-      else resolve(metadata.format.duration);
+      else {
+        const stream = metadata.streams.find(s => s.codec_type === 'audio');
+        resolve({
+          duration: parseFloat(metadata.format.duration),
+          codec: stream ? stream.codec_name : null,
+          sampleRate: stream ? parseInt(stream.sample_rate) : null,
+          channels: stream ? parseInt(stream.channels) : null
+        });
+      }
     });
   });
+}
+
+async function getAudioDuration(wavPath) {
+  const details = await getAudioDetails(wavPath);
+  return details.duration;
 }
 
 function getVideoDuration(videoPath) {

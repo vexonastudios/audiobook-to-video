@@ -54,6 +54,7 @@ const state = {
   selectedChapterIndex: 0,
   isRendering: false,
   codec: 'h264',             // 'h264' | 'h265'
+  fastAudioCopy: true,
   gpuStatus: 'unknown',       // 'unknown' | 'gpu' | 'cpu'
   gpuName: 'GPU'              // actual GPU name detected at runtime
 };
@@ -155,6 +156,7 @@ const els = {
   btnExport: $('btn-export'),
   btnStop: $('btn-stop'),
   codecSelect: $('codec-select'),
+  fastAudioToggle: $('fast-audio-toggle'),
   gpuBadge: $('gpu-badge'),
   gpuBadgeDot: $('gpu-badge-dot'),
   gpuBadgeText: $('gpu-badge-text'),
@@ -244,7 +246,8 @@ els.btnNewProject.addEventListener('click', () => {
       introDurationRaw: 0,
       chapters: [],
       selectedChapterIndex: 0,
-      isRendering: false
+      isRendering: false,
+      fastAudioCopy: true
     });
     // Reset transition UI
     els.transitionSelect.value = 'fade';
@@ -288,6 +291,7 @@ els.btnNewProject.addEventListener('click', () => {
     els.introFadeRow.style.display = 'none';
     els.introFadeSlider.value = 10;
     els.introFadeVal.textContent = '1.0s';
+    els.fastAudioToggle.checked = true;
 
     els.blurSlider.value = 40;
     els.blurVal.textContent = '40px';
@@ -1431,6 +1435,7 @@ async function beginRender() {
     introFadeDuration: state.introFadeDuration,
     introHasAudio: state.introHasAudio,
     codec: state.codec,
+    fastAudioCopy: state.fastAudioCopy,
     crf: 18
   };
 
@@ -1681,6 +1686,7 @@ function saveSession() {
     introFadeDuration: state.introFadeDuration,
     introHasAudio: state.introHasAudio,
     introDurationRaw: state.introDurationRaw,
+    fastAudioCopy: state.fastAudioCopy,
     accentColor: state.accentColor,
     isCustomColor: state.isCustomColor
   };
@@ -1742,6 +1748,10 @@ async function restoreSession() {
         state.introClipEnabled = d0.introClipEnabled;
         els.introEnableToggle.checked = d0.introClipEnabled;
         els.introSettings.style.display = d0.introClipEnabled ? 'block' : 'none';
+      }
+      if (d0.fastAudioCopy !== undefined) {
+        state.fastAudioCopy = d0.fastAudioCopy;
+        els.fastAudioToggle.checked = d0.fastAudioCopy;
       }
     } catch (_) {}
   }
@@ -1916,6 +1926,11 @@ async function restoreSession() {
 
 els.codecSelect.addEventListener('change', () => {
   state.codec = els.codecSelect.value;
+});
+
+els.fastAudioToggle.addEventListener('change', () => {
+  state.fastAudioCopy = els.fastAudioToggle.checked;
+  saveSession();
 });
 
 // ─────────────────────────────────────────────────────────────

@@ -946,11 +946,17 @@ function parseSrtToChapters(srtText) {
   // Rule: once we see a chapter-starting block, keep collecting rawText from
   // subsequent blocks until we hit one that contains "<break" — that block
   // provides the last fragment of the title (text before the <break).
+  // 
+  // If the SRT file has NO <break> tags (e.g. from Whisper or normal SRT),
+  // we assume the chapter title is completely contained within the single 
+  // block that started it, to prevent accumulating the entire rest of the book.
 
   const entries = [];
   let collecting = false;
   let chapterStartSec = 0;
   let accumulatedText = '';
+  
+  const hasAnyBreaks = /<break/i.test(srtText);
 
   const flushChapter = () => {
     if (!collecting) return;
@@ -994,31 +1000,34 @@ function parseSrtToChapters(srtText) {
   for (const { startSec, rawText } of rawBlocks) {
     const hasBreak = /<break/i.test(rawText);
 
-    if (!collecting) {
-      // Check if this block starts a chapter heading (strip tags first)
-      const stripped = rawText
-        .replace(/<[^>]+>/g, '')
-        .replace(/<\S[^\s>]*/g, '')
-        .trim();
+    // Check if this block starts a chapter heading (strip tags first)
+    const stripped = rawText
+      .replace(/<[^>]+>/g, '')
+      .replace(/<\S[^\s>]*/g, '')
+      .trim();
 
-      const isChapterStart =
-        /^chapter\s+\d+/i.test(stripped) ||
-        /^\d+\s*[-–—]\s*[A-Za-z]/.test(stripped) ||
-        /^[\[\(]?(?:(?:the\s+)?(?:author['']s|editor['']s)\s+)?(?:preface|introduction)[\]\).:\s]*$/i.test(stripped);
+    const isChapterStart =
+      /^chapter\s+\d+/i.test(stripped) ||
+      /^\d+\s*[-–—]\s*[A-Za-z]/.test(stripped) ||
+      /^[\[\(]?(?:(?:the\s+)?(?:author['']s|editor['']s)\s+)?(?:preface|introduction)[\]\).:\s]*$/i.test(stripped);
 
-      if (isChapterStart) {
-        collecting = true;
-        chapterStartSec = startSec;
-        // Keep text up to any <break (handles single-block chapters)
-        accumulatedText = hasBreak
-          ? rawText.replace(/<break.*/gi, '').trim()
-          : rawText;
+    if (isChapterStart) {
+      if (collecting) flushChapter();
+      
+      collecting = true;
+      chapterStartSec = startSec;
+      
+      // Keep text up to any <break (handles single-block chapters)
+      accumulatedText = hasBreak
+        ? rawText.replace(/<break.*/gi, '').trim()
+        : rawText;
 
-        if (hasBreak) flushChapter(); // fully self-contained in one block
+      // If the file doesn't use <break> tags, we assume the chapter title is 
+      // just this single block. Flush it immediately so we don't grab body text.
+      if (hasBreak || !hasAnyBreaks) {
+        flushChapter();
       }
-      // else: ordinary body text, ignore
-
-    } else {
+    } else if (collecting) {
       // Mid-collection: keep appending until we hit a <break block
       if (hasBreak) {
         const beforeBreak = rawText.replace(/<break.*/gi, '').trim();

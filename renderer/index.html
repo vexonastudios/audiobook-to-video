@@ -449,6 +449,22 @@
     </div>
   </div>
 
+  <div class="modal-overlay hidden" id="update-modal">
+    <div class="modal-content" style="max-width: 400px; text-align: center; padding: 32px;">
+      <div style="background: var(--accent-glow); width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; color: var(--accent-light);">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-3.25-3.25"/></svg>
+      </div>
+      <h2 style="margin-bottom: 12px;">Update Ready to Install</h2>
+      <p style="color: var(--text-muted); margin-bottom: 24px; font-size: 14px; line-height: 1.5;">
+        A new version <span id="update-version-text" style="color:var(--text);font-weight:600;"></span> of Audiobook to Video has been downloaded in the background. Would you like to restart the app to apply the update now?
+      </p>
+      <div style="display: flex; gap: 12px; justify-content: center;">
+        <button class="project-btn" id="btn-update-later" style="flex:1;">Later</button>
+        <button class="project-btn" id="btn-update-now" style="flex:1; background: var(--accent); color: var(--accent-light); border-color: var(--accent);">Restart & Install</button>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>

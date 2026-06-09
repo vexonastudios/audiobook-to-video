@@ -1,7 +1,7 @@
 {
   "name": "audiobook-video-generator",
-  "version": "1.1.2",
-  "description": "Audiobook to Video by Bodee Books",
+  "version": "1.1.4",
+  "description": "Audiobook to Video by Vexona Studios",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -21,9 +21,13 @@
     "electron-builder": "^24.9.1"
   },
   "build": {
-    "appId": "com.bodeebooks.videogenerator",
-    "productName": "Audiobook to Video by Bodee Books",
+    "appId": "com.vexonastudios.videogenerator",
+    "productName": "Audiobook to Video by Vexona Studios",
     "asar": true,
+    "nsis": {
+      "installerSidebar": "assets/installer-sidebar.bmp",
+      "uninstallerSidebar": "assets/installer-sidebar.bmp"
+    },
     "asarUnpack": [
       "node_modules/ffmpeg-static/**",
       "node_modules/@ffprobe-installer/**"

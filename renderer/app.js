@@ -349,51 +349,63 @@ els.tutorialModal.addEventListener('click', (e) => {
   if (e.target === els.tutorialModal) els.tutorialModal.classList.add('hidden');
 });
 
-els.btnUpdate.addEventListener('click', async () => {
-  els.btnUpdate.disabled = true;
-  els.btnUpdate.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-3.25-3.25"/></svg> Checking...`;
-  try {
-    const res = await window.api.checkForUpdates();
-    if (!res) {
-      showAlert("Up to Date", "You are already running the latest version of Audiobook to Video!");
+if (els.btnUpdate) {
+  els.btnUpdate.addEventListener('click', async () => {
+    els.btnUpdate.disabled = true;
+    els.btnUpdate.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-3.25-3.25"/></svg> Checking...`;
+    try {
+      const res = await window.api.checkForUpdates();
+      if (!res) {
+        showAlert("Up to Date", "You are already running the latest version of Audiobook to Video!");
+      }
+    } catch (e) {
+      console.error("Update check failed", e);
+      showAlert("Update Check Failed", "Could not connect to the update server. Please check your internet connection.");
+    } finally {
+      if (els.btnUpdate) {
+        els.btnUpdate.disabled = false;
+        els.btnUpdate.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-3.25-3.25"/></svg> Check for Updates`;
+      }
     }
-  } catch (e) {
-    console.error("Update check failed", e);
-    showAlert("Update Check Failed", "Could not connect to the update server. Please check your internet connection.");
-  } finally {
-    els.btnUpdate.disabled = false;
-    els.btnUpdate.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-3.25-3.25"/></svg> Check for Updates`;
-  }
-});
+  });
+}
 
 // Update Modal Logic
 let updateVersion = '';
 
 window.api.onUpdateAvailable((version) => {
   updateVersion = version;
-  els.btnUpdate.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-3.25-3.25"/></svg> Downloading v${version}...`;
+  if (els.btnUpdate) {
+    els.btnUpdate.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-3.25-3.25"/></svg> Downloading v${version}...`;
+  }
 });
 
 window.api.onUpdateDownloadProgress((percent) => {
   const rounded = Math.round(percent);
   const verSuffix = updateVersion ? ` v${updateVersion}` : '';
-  els.btnUpdate.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-3.25-3.25"/></svg> Downloading${verSuffix} (${rounded}%)...`;
+  if (els.btnUpdate) {
+    els.btnUpdate.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-3.25-3.25"/></svg> Downloading${verSuffix} (${rounded}%)...`;
+  }
 });
 
 window.api.onUpdateDownloaded((version) => {
-  els.updateVersionText.textContent = version ? `(${version})` : '';
-  els.updateModal.classList.remove('hidden');
+  if (els.updateVersionText) els.updateVersionText.textContent = version ? `(${version})` : '';
+  if (els.updateModal) els.updateModal.classList.remove('hidden');
 });
 
-els.btnUpdateLater.addEventListener('click', () => {
-  els.updateModal.classList.add('hidden');
-});
+if (els.btnUpdateLater) {
+  els.btnUpdateLater.addEventListener('click', () => {
+    if (els.updateModal) els.updateModal.classList.add('hidden');
+  });
+}
 
-els.btnUpdateNow.addEventListener('click', () => {
-  els.btnUpdateNow.disabled = true;
-  els.btnUpdateNow.textContent = "Restarting...";
-  window.api.installUpdate();
-});
+if (els.btnUpdateNow) {
+  els.btnUpdateNow.addEventListener('click', () => {
+    els.btnUpdateNow.disabled = true;
+    els.btnUpdateNow.textContent = "Restarting...";
+    window.api.installUpdate();
+  });
+}
 
 els.btnLoadProject.addEventListener('click', async () => {
   const dataStr = await window.api.loadProjectFile();

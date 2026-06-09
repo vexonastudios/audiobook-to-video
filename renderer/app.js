@@ -926,19 +926,37 @@ function extractDateRange(title) {
     [/(?:[-\u2013\u2014,.]|\.\s*)\s*(\d{4})\s*$/, m => m[1]],
   ];
 
-  for (const [re, build] of patterns) {
-    const match = title.match(re);
-    if (match) {
-      const dateRange = build(match);
-      // Remove the matched portion and clean up any trailing separator
-      const cleanTitle = title
-        .slice(0, title.length - match[0].length)
-        .replace(/[\s\-\u2013\u2014,.]+$/, '')
-        .trim();
-      if (!cleanTitle) continue; // guard: don't consume the whole title
+  const cleanAndMatch = (str) => {
+    for (const [re, build] of patterns) {
+      const match = str.match(re);
+      if (match) return { match, build };
+    }
+    return null;
+  };
+
+  let res = cleanAndMatch(title);
+  
+  // If no match, check if stripping a trailing period helps match a date pattern
+  if (!res && title.trim().endsWith('.')) {
+    const stripped = title.trim().slice(0, -1).trim();
+    res = cleanAndMatch(stripped);
+    if (res) {
+      title = stripped; // Use the stripped title as the match target
+    }
+  }
+
+  if (res) {
+    const { match, build } = res;
+    const dateRange = build(match);
+    const cleanTitle = title
+      .slice(0, title.length - match[0].length)
+      .replace(/[\s\-\u2013\u2014,.]+$/, '')
+      .trim();
+    if (cleanTitle) {
       return { cleanTitle, dateRange };
     }
   }
+
   return { cleanTitle: title, dateRange: null };
 }
 

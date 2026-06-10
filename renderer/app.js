@@ -866,7 +866,11 @@ els.btnImportSrt.addEventListener('click', async () => {
 });
 
 /**
- * Convert a string to Title Case — only fires if the whole string is ALL CAPS.
+ * Convert a string to Title Case.
+ * Handles ALL CAPS, lowercase, and mixed-case input uniformly.
+ * "Small" connector words (a, an, the, and, but, or, etc.) remain lowercase
+ * unless they are the first word. Non-letter prefix characters (quotes,
+ * parentheses, etc.) are skipped so the first real letter is capitalised.
  */
 function toTitleCase(str) {
   const letters = str.replace(/[^a-zA-Z]/g, '');
@@ -878,7 +882,7 @@ function toTitleCase(str) {
     .replace(/[^\s\-\u2013\u2014]+/g, (word, offset) => {
       const bare = word.replace(/^[^a-z]+|[^a-z]+$/gi, '');
       if (offset === 0 || !smalls.has(bare)) {
-        return word.charAt(0).toUpperCase() + word.slice(1);
+        return word.replace(/[a-z]/i, letter => letter.toUpperCase());
       }
       return word;
     });
@@ -888,13 +892,14 @@ function toTitleCase(str) {
  * Extracts a date (range) from the END of a chapter title.
  *
  * Recognised formats (all anchored to end of string):
- *   — 1740 to 1744          dash + "to" range
- *   1740 to 1744            bare "to" range
- *   1769, 1770              comma-separated pair
- *   1740 and 1741           "and"-joined pair
- *   1754-1763 / 1754–1763   hyphen / en-dash range
- *   1740                    single year
- *   [1740–1744]             bracketed range (from SRT import)
+ *   — 1740 to 1744             dash + "to" range
+ *   (1200 to 1300)             parenthesized "to" range
+ *   (A.D. 1235 to 1265)        parenthesized "to" range with a.d. prefix
+ *   1769, 1770                 comma-separated pair
+ *   1740 and 1741              "and"-joined pair
+ *   1754-1763 / 1754–1763      hyphen / en-dash range
+ *   1740                       single year (after separator)
+ *   [1740–1744]                bracketed range (from SRT import)
  *
  * Returns { cleanTitle, dateRange } where dateRange may be null.
  * The cleanTitle has the matched date token stripped, plus any trailing
@@ -907,11 +912,11 @@ function extractDateRange(title) {
     // Bracketed (SRT import): [1740–1744]
     [/\s*\[(\d{4})[\u2013\u2014-](\d{4})\]\s*$/, m => `${m[1]}\u2013${m[2]}`],
 
+    // Parenthesized or bare "1200 to 1300" (with optional a.d. prefix inside or outside parentheses)
+    [/\s*\(?(?:a\.d\.\s+)?(\d{4})\s+to\s+(\d{4})\)?\s*$/i, m => `${m[1]}\u2013${m[2]}`],
+
     // "— 1740 to 1744" or "– 1740 to 1744" (leading dash required)
     [/\s*[-\u2013\u2014]\s*(\d{4})\s+to\s+(\d{4})\s*$/i, m => `${m[1]}\u2013${m[2]}`],
-
-    // "1740 to 1744" (bare, no leading dash)
-    [/\s+(\d{4})\s+to\s+(\d{4})\s*$/i, m => `${m[1]}\u2013${m[2]}`],
 
     // "1769, 1770"
     [/\s*(\d{4}),\s*(\d{4})\s*$/, m => `${m[1]},\u00a0${m[2]}`],
@@ -1079,7 +1084,7 @@ function parseSrtToChapters(srtText) {
 
     const isChapterStart =
       /^chapter\s+\d+/i.test(stripped) ||
-      /^\d+\s*[-–—]\s*[A-Za-z]/.test(stripped) ||
+      /^\d+\s*[-–—]\s*["""''\u2018\u2019]?[A-Za-z]/.test(stripped) ||
       /^[\[\(]?(?:(?:the\s+)?(?:author['']s|editor['']s)\s+)?(?:preface|introduction)[\]\).:\s]*$/i.test(stripped);
 
     if (isChapterStart) {
@@ -1094,14 +1099,14 @@ function parseSrtToChapters(srtText) {
         : rawText;
 
       const isCompleteTitle = 
-        /[-–—:]/.test(stripped) || 
-        stripped.includes('\n') || 
-        /^[\[\(]?(?:(?:the\s+)?(?:author['']s|editor['']s)\s+)?(?:preface|introduction)[\]\).:\s]*$/i.test(stripped) ||
-        stripped.length > 40;
+        (hasBreak || !hasAnyBreaks) && (
+          /[-–—:]/.test(stripped) || 
+          stripped.includes('\n') || 
+          /^[\[\(]?(?:(?:the\s+)?(?:author['']s|editor['']s)\s+)?(?:preface|introduction)[\]\).:\s]*$/i.test(stripped) ||
+          (stripped.length > 40 && !/(?:to|and|in|at|on|for|with|of|a\.d\.|\()$/i.test(stripped))
+        );
 
-      // If the file doesn't use <break> tags, we assume the chapter title is 
-      // just this single block. Flush it immediately so we don't grab body text.
-      if (hasBreak || !hasAnyBreaks || isCompleteTitle) {
+      if (isCompleteTitle) {
         flushChapter();
       }
     } else if (collecting) {
@@ -1118,7 +1123,7 @@ function parseSrtToChapters(srtText) {
         } else {
           accumulatedText += ' ' + rawText;
           // Safety net: if the title gets suspiciously long, we've likely bled into body text
-          if (accumulatedText.length > 120) {
+          if (accumulatedText.length > 150) {
             flushChapter();
           }
         }

@@ -12,8 +12,8 @@ ffprobePath = ffprobePath.replace('app.asar', 'app.asar.unpacked');
 fluent.setFfmpegPath(ffmpegPath);
 fluent.setFfprobePath(ffprobePath);
 
-const OUTPUT_FPS = 5;
-const TRANSITION_FPS = 5; // match chapter FPS — halves render cost, fixes concat FPS mismatch
+const OUTPUT_FPS = 30;
+const TRANSITION_FPS = 30; // match chapter FPS — halves render cost, fixes concat FPS mismatch
 
 // ── GPU Detection (run once at startup) ─────────────────────────────────────
 // We test NVENC once before touching real data, so we never waste time on

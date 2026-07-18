@@ -5,8 +5,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win",
-    "release": "electron-builder --win --publish always"
+    "dist": "electron-builder",
+    "release": "electron-builder --publish always"
   },
   "dependencies": {
     "@ffprobe-installer/ffprobe": "^1.4.1",
@@ -39,6 +39,10 @@
     "win": {
       "target": ["nsis"],
       "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": ["dmg", "zip"],
+      "icon": "assets/icon.png"
     },
     "nsis": {
       "oneClick": false,

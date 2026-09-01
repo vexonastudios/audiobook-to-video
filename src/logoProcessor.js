@@ -19,44 +19,51 @@ async function processLogo(logoPath, accentColor) {
   const { width, height, channels } = info;
   const out = Buffer.alloc(width * height * 4);
 
+  // Transparent PNGs already contain a clean coverage mask. For logos on an
+  // opaque white background, infer coverage from luminance and normalize it to
+  // the darkest commonly occurring ink value. This preserves the faint edge
+  // pixels that make curves and fine type look antialiased after downscaling.
+  let transparentPixelCount = 0;
+  const brightnessHistogram = new Uint32Array(256);
+  let visiblePixelCount = 0;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const a = data[i + 3];
+    if (a < 250) transparentPixelCount++;
+    if (a > 0) {
+      const brightness = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+      brightnessHistogram[brightness]++;
+      visiblePixelCount++;
+    }
+  }
+
+  // Ignore isolated partially transparent pixels in otherwise opaque images;
+  // they are not evidence of an intentionally transparent logo background.
+  const hasTransparency = transparentPixelCount > width * height * 0.005;
+
+  const darkPixelTarget = Math.max(1, Math.round(visiblePixelCount * 0.005));
+  let darkPixelCount = 0;
+  let inkBrightness = 0;
+  for (; inkBrightness < 255; inkBrightness++) {
+    darkPixelCount += brightnessHistogram[inkBrightness];
+    if (darkPixelCount >= darkPixelTarget) break;
+  }
+  const luminanceRange = Math.max(32, 255 - inkBrightness);
+
   for (let i = 0; i < data.length; i += 4) {
     const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
 
-    if (a === 0) {
-      // Keep fully transparent pixels transparent
-      out[i] = tr;
-      out[i + 1] = tg;
-      out[i + 2] = tb;
-      out[i + 3] = 0;
-      continue;
-    }
-
-    // Perceived brightness (ignore alpha)
     const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
+    const coverage = hasTransparency
+      ? 1
+      : Math.max(0, Math.min(1, (255 - brightness) / luminanceRange));
 
-    // Threshold: pixels brighter than 230 are considered "white background"
-    if (brightness > 230 && a > 200) {
-      // White → fully transparent
-      out[i] = tr;
-      out[i + 1] = tg;
-      out[i + 2] = tb;
-      out[i + 3] = 0;
-    } else {
-      // Logo pixel: map darkness to alpha, tint with accent color
-      // darkness ranges 0 (white) to 1 (black)
-      const darkness = Math.max(0, (230 - brightness) / 230);
-      let newAlpha = Math.min(255, Math.round(darkness * 255 * 1.4)); // slight boost
-
-      // Scale the new alpha by the original alpha to preserve existing transparency
-      newAlpha = Math.round(newAlpha * (a / 255));
-
-      // Tint: blend accent color with white based on darkness
-      const blend = darkness;
-      out[i] = Math.round(tr * blend + 255 * (1 - blend));
-      out[i + 1] = Math.round(tg * blend + 255 * (1 - blend));
-      out[i + 2] = Math.round(tb * blend + 255 * (1 - blend));
-      out[i + 3] = newAlpha;
-    }
+    // Keep every antialiased edge pixel the same tint. Blending edge RGB toward
+    // white creates pale halos and makes detailed logos look noisy/pixelated.
+    out[i] = tr;
+    out[i + 1] = tg;
+    out[i + 2] = tb;
+    out[i + 3] = Math.round(a * coverage);
   }
 
   // Convert back to PNG

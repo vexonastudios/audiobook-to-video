@@ -40,8 +40,8 @@ function createMainWindow() {
 
 function createFrameWindow() {
   frameWindow = new BrowserWindow({
-    width: 1280,
-    height: 720,
+    width: 1920,
+    height: 1080,
     show: false,
     icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: {

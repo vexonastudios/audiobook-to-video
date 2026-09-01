@@ -14,6 +14,9 @@ fluent.setFfprobePath(ffprobePath);
 
 const OUTPUT_FPS = 30;
 const TRANSITION_FPS = 30; // match chapter FPS — halves render cost, fixes concat FPS mismatch
+const OUTPUT_WIDTH = 1920;
+const OUTPUT_HEIGHT = 1080;
+const OUTPUT_SIZE = `${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`;
 
 // ── GPU Detection (run once at startup) ─────────────────────────────────────
 // We test NVENC once before touching real data, so we never waste time on
@@ -25,9 +28,9 @@ async function detectNvenc(onLog) {
 
   const testOut = path.join(os.tmpdir(), `nvenc_test_${Date.now()}.mp4`);
 
-  // Use an in-memory 1280x720 black frame via lavfi (no disk image needed)
+  // Use an in-memory output-sized black frame via lavfi (no disk image needed)
   const args = [
-    '-f', 'lavfi', '-i', 'color=black:s=1280x720:r=5:d=1',
+    '-f', 'lavfi', '-i', `color=black:s=${OUTPUT_SIZE}:r=5:d=1`,
     '-t', '0.5',
     '-c:v', 'h264_nvenc',
     '-preset', 'p2',
@@ -314,11 +317,11 @@ async function renderVideo(params, callbacks) {
         const D = introFadeDuration;
         const T = Math.max(0, introData.duration - D);
         
-        // We scale the intro to 1280x720 (to match frameWindow), force the fps, and apply xfade.
+        // Scale the intro to match the 1080p frame renderer, force the fps, and apply xfade.
         if (useAudio) {
           filterArgs.push(
             '-filter_complex',
-            `[0:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS}[v0]; ` +
+            `[0:v]scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease,pad=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS}[v0]; ` +
             `[1:v]fps=${OUTPUT_FPS}[v1]; ` +
             `[v0][v1]xfade=transition=fade:duration=${D}:offset=${T}[vout]; ` +
             `[0:a][1:a]acrossfade=d=${D}[aout]`,
@@ -328,7 +331,7 @@ async function renderVideo(params, callbacks) {
         } else {
           filterArgs.push(
             '-filter_complex',
-            `[0:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS}[v0]; ` +
+            `[0:v]scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease,pad=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS}[v0]; ` +
             `[1:v]fps=${OUTPUT_FPS}[v1]; ` +
             `[v0][v1]xfade=transition=fade:duration=${D}:offset=${T}[vout]`,
             '-map', '[vout]',
@@ -340,7 +343,7 @@ async function renderVideo(params, callbacks) {
         if (useAudio) {
           filterArgs.push(
             '-filter_complex',
-            `[0:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS}[v0]; ` +
+            `[0:v]scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease,pad=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS}[v0]; ` +
             `[1:v]fps=${OUTPUT_FPS}[v1]; ` +
             `[v0][0:a][v1][1:a]concat=n=2:v=1:a=1[vout][aout]`,
             '-map', '[vout]',
@@ -350,7 +353,7 @@ async function renderVideo(params, callbacks) {
           // If no intro audio, generate silence so concat still works seamlessly
           filterArgs.push(
             '-filter_complex',
-            `[0:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS}[v0]; ` +
+            `[0:v]scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease,pad=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS}[v0]; ` +
             `[1:v]fps=${OUTPUT_FPS}[v1]; ` +
             `anullsrc=d=${introData.duration}:r=44100[silence]; ` +
             `[v0][silence][v1][1:a]concat=n=2:v=1:a=1[vout][aout]`,
@@ -414,7 +417,7 @@ async function renderVideo(params, callbacks) {
         let mapArgs;
 
         if (useAudio) {
-          normalizeFilter = `[0:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS}[v]`;
+          normalizeFilter = `[0:v]scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease,pad=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS}[v]`;
           mapArgs = ['-map', '[v]', '-map', '0:a'];
           if (useAudioCopy && audioDetails.codec) {
             // Match the audiobook's audio properties
@@ -430,7 +433,7 @@ async function renderVideo(params, callbacks) {
           }
         } else {
           const sampleRate = (useAudioCopy && audioDetails.sampleRate) ? audioDetails.sampleRate : 44100;
-          normalizeFilter = `[0:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS}[v]; anullsrc=d=${introData.duration}:r=${sampleRate}[a]`;
+          normalizeFilter = `[0:v]scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease,pad=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS}[v]; anullsrc=d=${introData.duration}:r=${sampleRate}[a]`;
           mapArgs = ['-map', '[v]', '-map', '[a]'];
           if (useAudioCopy && audioDetails.codec) {
             const targetCodec = audioDetails.codec === 'mp3' ? 'libmp3lame' : 'aac';

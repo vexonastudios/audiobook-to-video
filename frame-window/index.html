@@ -6,7 +6,7 @@
   <link rel="icon" type="image/png" href="../assets/icon.png">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 1280px; height: 720px; overflow: hidden; background: #000; }
+    html, body { width: 1920px; height: 1080px; overflow: hidden; background: #000; }
 
     /* Load EB Garamond from local fontsource package */
     @font-face {
@@ -38,9 +38,24 @@
   </style>
 </head>
 <body>
-  <canvas id="mainCanvas" width="1280" height="720"></canvas>
+  <canvas id="mainCanvas" width="1920" height="1080"></canvas>
 
   <script>
+  // Layout is authored in the original 1280x720 coordinate system, but is
+  // rasterized at 1080p so fine artwork (especially logos) survives playback
+  // on high-resolution displays.
+  const LOGICAL_WIDTH = 1280;
+  const LOGICAL_HEIGHT = 720;
+  const FRAME_WIDTH = 1920;
+  const FRAME_HEIGHT = 1080;
+  const RENDER_SCALE = FRAME_WIDTH / LOGICAL_WIDTH;
+
+  function configureRenderContext(ctx) {
+    ctx.setTransform(RENDER_SCALE, 0, 0, RENDER_SCALE, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+  }
+
   // ─────────────────────────────────────────────────────────────
   // Image cache — avoids reloading the same image multiple times
   // ─────────────────────────────────────────────────────────────
@@ -157,7 +172,7 @@
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Core rendering function — draws one complete 1280×720 frame
+  // Core rendering function — draws one complete 1920x1080 frame
   // ─────────────────────────────────────────────────────────────
 
   async function drawChapterFrame(ctx, params, alpha) {
@@ -173,9 +188,11 @@
       titleFontSize: fixedFontSize = 0
     } = params;
 
-    const W = 1280, H = 720;
+    const W = LOGICAL_WIDTH, H = LOGICAL_HEIGHT;
     const [ar, ag, ab] = accentColor;
     const accentCSS = `rgb(${ar},${ag},${ab})`;
+
+    configureRenderContext(ctx);
 
     // ── 1. Background: blurred image fill ──────────────────────
     ctx.save();
@@ -352,9 +369,12 @@
         const lh = logoImg.naturalHeight * lScale;
         const lx = W - lw - 28;
         const ly = H - lh - 22;
+        ctx.save();
         ctx.globalAlpha = 0.9;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(logoImg, lx, ly, lw, lh);
-        ctx.globalAlpha = 1;
+        ctx.restore();
       } catch (_) {}
     }
   }
@@ -376,7 +396,7 @@
 
     const canvas = document.getElementById('mainCanvas');
     const ctx = canvas.getContext('2d');
-    const W = 1280, H = 720;
+    const W = FRAME_WIDTH, H = FRAME_HEIGHT;
 
     if (!nextChapter || blendAlpha <= 0) {
       // Straight render
@@ -399,6 +419,10 @@
       ctx.drawImage(offB, 0, 0);
       ctx.globalAlpha = 1;
     }
+
+    // drawChapterFrame uses logical 720p coordinates scaled onto the 1080p
+    // bitmap. Transition effects below operate directly in output pixels.
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
 
     // ── Post-process: apply transition overlay ─────────────────────
     if (transitionType === 'fade') {
@@ -449,7 +473,7 @@
     const canvas = document.getElementById('mainCanvas');
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, 1280, 720);
+    ctx.fillRect(0, 0, FRAME_WIDTH, FRAME_HEIGHT);
 
     // Trigger font load
     ctx.font = '72px "EB Garamond"';

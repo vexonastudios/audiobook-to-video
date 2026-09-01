@@ -308,7 +308,7 @@ els.btnNewProject.addEventListener('click', () => {
 
     // Clear preview canvas
     const ctx = els.previewCanvas.getContext('2d');
-    ctx.clearRect(0, 0, 640, 360);
+    ctx.clearRect(0, 0, els.previewCanvas.width, els.previewCanvas.height);
     els.previewOverlay.classList.remove('hidden');
     
     els.logContent.innerHTML = '';
@@ -1388,12 +1388,15 @@ async function doRenderPreview() {
     const dataURL = await window.api.renderPreview(params);
 
     if (dataURL) {
-      // Draw the 1280×720 PNG into the 640×360 preview canvas (scaled)
+      // Keep the preview bitmap at export resolution. CSS handles display-size
+      // scaling without baking in a second low-resolution rasterization pass.
       const img = new Image();
       img.onload = () => {
         const ctx = els.previewCanvas.getContext('2d');
-        ctx.clearRect(0, 0, 640, 360);
-        ctx.drawImage(img, 0, 0, 640, 360);
+        ctx.clearRect(0, 0, els.previewCanvas.width, els.previewCanvas.height);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, els.previewCanvas.width, els.previewCanvas.height);
         els.previewOverlay.classList.add('hidden');
       };
       img.src = dataURL;

@@ -18,6 +18,11 @@ const OUTPUT_WIDTH = 1920;
 const OUTPUT_HEIGHT = 1080;
 const OUTPUT_SIZE = `${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`;
 const FRAME_DURATION = 1 / OUTPUT_FPS;
+// Sparse samples separated by many minutes are legal VFR, but several players
+// display the nearest sample instead of holding the preceding one. Reusing the
+// same rendered PNG once per second keeps seeking deterministic while retaining
+// a ~30x reduction versus constant 30fps chapter rendering.
+const MAX_HOLD_SAMPLE_DURATION = 1;
 
 const nvencAvailability = new Map();
 
@@ -384,7 +389,7 @@ async function encodeVisualTimeline({
 }
 
 function writeTimelineManifest(entries, manifestPath) {
-  const manifestEntries = entries.map(entry => ({ ...entry }));
+  const manifestEntries = entries.flatMap(splitLongHoldEntry);
   const last = manifestEntries[manifestEntries.length - 1];
   if (last.duration <= FRAME_DURATION) throw new Error('Timeline needs at least one frame of final hold duration.');
   last.duration -= FRAME_DURATION;
@@ -401,6 +406,33 @@ function writeTimelineManifest(entries, manifestPath) {
   lines.push(`file ${quoteConcatPath(last.path)}`);
   lines.push(`option framerate ${OUTPUT_FPS}`);
   fs.writeFileSync(manifestPath, lines.join('\n'), 'utf8');
+}
+
+function splitLongHoldEntry(entry) {
+  const boundarySampleDuration = FRAME_DURATION * 2;
+  if (entry.kind !== 'still' || entry.duration <= boundarySampleDuration) {
+    return [{ ...entry }];
+  }
+
+  const chunks = [];
+  // Reserve a sample immediately before the next chapter/transition. Without
+  // it, an input seek between the last periodic sample and the boundary can
+  // select the following chapter a fraction of a second too early.
+  let remaining = entry.duration - boundarySampleDuration;
+  while (remaining > MAX_HOLD_SAMPLE_DURATION + 1e-9) {
+    chunks.push({ ...entry, duration: MAX_HOLD_SAMPLE_DURATION });
+    remaining -= MAX_HOLD_SAMPLE_DURATION;
+  }
+
+  // Avoid a final sample too short for the concat image demuxer. A hold just
+  // over one second is preferable to introducing a zero-duration tail sample.
+  if (remaining <= FRAME_DURATION && chunks.length > 0) {
+    chunks[chunks.length - 1].duration += remaining;
+  } else if (remaining > 1e-9) {
+    chunks.push({ ...entry, duration: remaining });
+  }
+  chunks.push({ ...entry, duration: boundarySampleDuration });
+  return chunks;
 }
 
 function videoEncodeArgs({ useGPU, codec, crf, stillTimeline = false }) {

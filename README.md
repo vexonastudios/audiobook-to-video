@@ -13,8 +13,10 @@ Built on Electron and powered by FFmpeg, it features hardware-accelerated render
 - **Customizable Transitions:** Choose between smooth chapter transitions such as Fade to Black, Cross Dissolve, Lens Flare Burn, and Zoom Blur Push.
 - **Video Intros:** Easily prepend an MP4 video intro with options to include audio, hard-cut, or smooth-fade into the audiobook.
 - **Dynamic Background Styling:** Fine-tune background Gaussian blur, opacity, vertical positioning, cover border thickness, and automatically extract accent colors from your cover art.
-- **Hardware Acceleration:** Leverage NVIDIA NVENC for massive speed boosts during export.
-- **Fast Audio Copy:** If your audiobook is an MP3 or M4A, the app can skip audio re-encoding entirely for near-instant rendering.
+- **Efficient Static Rendering:** Chapter artwork is encoded as a timestamped variable-frame-rate timeline, so long static chapters do not generate thousands of duplicate frames.
+- **Hardware Acceleration:** Leverage NVIDIA NVENC for transitions, intros, and final video encoding.
+- **Fast Audio:** Compatible MP3/M4A audio is copied directly; WAV and other sources are converted once and reused from a bounded audio cache.
+- **Compatibility Mode:** The former constant-30fps renderer remains available as an opt-in fallback.
 - **Export Options:** Choose between H.264 for maximum compatibility or H.265 (HEVC) for ~40% smaller file sizes.
 
 ---

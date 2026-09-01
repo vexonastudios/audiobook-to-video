@@ -7,6 +7,7 @@ const { autoUpdater } = require('electron-updater');
 // the hidden frame-window canvas renderer (the slowest step of the pipeline).
 let mainWindow = null;
 let frameWindow = null;
+let frameWindowReady = null;
 
 // ─────────────────────────────────────────────
 // Window Creation
@@ -51,6 +52,12 @@ function createFrameWindow() {
     }
   });
 
+  frameWindowReady = new Promise((resolve, reject) => {
+    frameWindow.webContents.once('did-finish-load', resolve);
+    frameWindow.webContents.once('did-fail-load', (_, code, description) => {
+      reject(new Error(`Frame renderer failed to load (${code}): ${description}`));
+    });
+  });
   frameWindow.loadFile(path.join(__dirname, 'frame-window', 'index.html'));
 }
 
@@ -339,7 +346,10 @@ ipcMain.handle('start-render', async (event, params) => {
   renderCancelled = false;
 
   try {
-    await renderVideo(params, {
+    await renderVideo({
+      ...params,
+      audioCacheDir: path.join(app.getPath('userData'), 'audio-cache')
+    }, {
       onProgress: (data) => {
         if (mainWindow) mainWindow.webContents.send('render-progress', data);
       },
@@ -347,6 +357,9 @@ ipcMain.handle('start-render', async (event, params) => {
         if (mainWindow) mainWindow.webContents.send('render-log', msg);
       },
       renderFrame: renderFrameInWindow,
+      prepareFrameRenderer,
+      renderFrameToFile,
+      renderTransitionFrameToFile,
       isCancelled: () => renderCancelled
     });
     if (mainWindow) mainWindow.webContents.send('render-complete', { success: true });
@@ -397,11 +410,7 @@ ipcMain.handle('get-gpu-name', async () => {
 // ─────────────────────────────────────────────
 
 async function renderFrameInWindow(params) {
-  if (!frameWindow || frameWindow.isDestroyed()) {
-    createFrameWindow();
-    // Wait for it to be ready
-    await new Promise(resolve => setTimeout(resolve, 1500));
-  }
+  await ensureFrameWindowReady();
 
   // Execute renderFrame in the hidden window and capture as data URL
   const dataURL = await frameWindow.webContents.executeJavaScript(`
@@ -417,4 +426,30 @@ async function renderFrameInWindow(params) {
   `);
 
   return dataURL;
+}
+
+async function ensureFrameWindowReady() {
+  if (!frameWindow || frameWindow.isDestroyed()) createFrameWindow();
+  await frameWindowReady;
+}
+
+async function prepareFrameRenderer(params) {
+  await ensureFrameWindowReady();
+  return frameWindow.webContents.executeJavaScript(
+    `window.setRenderBaseParams(${JSON.stringify(params)})`
+  );
+}
+
+async function renderFrameToFile(params, outputPath) {
+  await ensureFrameWindowReady();
+  return frameWindow.webContents.executeJavaScript(
+    `window.renderFrameToFile(${JSON.stringify(params)}, ${JSON.stringify(outputPath)})`
+  );
+}
+
+async function renderTransitionFrameToFile(params, outputPath) {
+  await ensureFrameWindowReady();
+  return frameWindow.webContents.executeJavaScript(
+    `window.renderTransitionFrameToFile(${JSON.stringify(params)}, ${JSON.stringify(outputPath)})`
+  );
 }

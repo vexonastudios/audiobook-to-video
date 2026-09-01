@@ -360,9 +360,16 @@
         </div>
 
         <div class="export-meta-row" style="margin-top: 8px;">
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted);cursor:pointer;-webkit-app-region: no-drag;" title="If your audiobook is an MP3/M4A, this copies the audio stream directly without re-encoding, making rendering instant.">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted);cursor:pointer;-webkit-app-region: no-drag;" title="Copies compatible compressed audio directly. WAV and other sources are converted once and reused from the audio cache.">
             <input type="checkbox" id="fast-audio-toggle" checked style="accent-color:var(--accent);cursor:pointer">
-            <span>Fast Audio Copy (Instant rendering, skips re-encoding)</span>
+            <span>Fast Audio (copy compressed sources / cache conversions)</span>
+          </label>
+        </div>
+
+        <div class="export-meta-row" style="margin-top: 6px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted);cursor:pointer;-webkit-app-region: no-drag;" title="Uses the former constant-30fps rendering process. Enable only if the optimized renderer has a compatibility problem.">
+            <input type="checkbox" id="compatibility-render-toggle" style="accent-color:var(--accent);cursor:pointer">
+            <span>Compatibility Mode (legacy constant 30fps; much slower)</span>
           </label>
         </div>
 
@@ -453,7 +460,7 @@
         <p>Use the sliders on the left to adjust background blur and opacity. You can also pick a <strong>Transition Style</strong> (like Fade, Cross Dissolve, or Zoom Blur) and set its duration. Use the <strong>Preview</strong> section's dropdown to see exactly what each chapter will look like.</p>
 
         <h3>5. Render Video</h3>
-        <p>Once your fields are filled and chapters are parsed, click <strong>Render Video</strong>. The app uses your <strong>NVIDIA RTX GPU (NVENC)</strong> to encode the video in hardware — massively faster than CPU encoding! Choose <strong>H.264</strong> for max compatibility or <strong>H.265 HEVC</strong> for ~40% smaller file sizes. The 🎮 GPU badge in the export bar confirms hardware acceleration is active.</p>
+        <p>Once your fields are filled and chapters are parsed, click <strong>Render Video</strong>. The optimized renderer stores one high-resolution still per chapter and uses your <strong>NVIDIA RTX GPU (NVENC)</strong> for video encoding when available. Choose <strong>H.264</strong> for max compatibility or <strong>H.265 HEVC</strong> for ~40% smaller file sizes. Use <strong>Compatibility Mode</strong> only if a particular media file has trouble with the optimized renderer.</p>
       </div>
     </div>
   </div>

@@ -27,4 +27,6 @@ Example Format:
 - Use the **Preview** section's dropdown above the canvas to see exactly what each chapter will look like.
 
 ## 5. Render Video
-Once your fields are filled and chapters are parsed, click **Render Video**. The app uses hardware acceleration (like NVENC) to encode your video lightning fast. You can track progress in the log box at the bottom.
+Once your fields are filled and chapters are parsed, click **Render Video**. The optimized renderer stores one high-resolution still per chapter and only creates additional frames for transitions or intros. Compatible compressed audio is copied directly, while other audio is cached after its first conversion. You can track progress in the log box at the bottom.
+
+If a particular media file has trouble with the optimized renderer, enable **Compatibility Mode** in the export section to use the former constant-30fps process. This fallback is substantially slower.

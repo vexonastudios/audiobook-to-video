@@ -55,6 +55,7 @@ const state = {
   isRendering: false,
   codec: 'h264',             // 'h264' | 'h265'
   fastAudioCopy: true,
+  compatibilityMode: false,  // use the legacy constant-30fps renderer
   gpuStatus: 'unknown',       // 'unknown' | 'gpu' | 'cpu'
   gpuName: 'GPU'              // actual GPU name detected at runtime
 };
@@ -157,6 +158,7 @@ const els = {
   btnStop: $('btn-stop'),
   codecSelect: $('codec-select'),
   fastAudioToggle: $('fast-audio-toggle'),
+  compatibilityToggle: $('compatibility-render-toggle'),
   gpuBadge: $('gpu-badge'),
   gpuBadgeDot: $('gpu-badge-dot'),
   gpuBadgeText: $('gpu-badge-text'),
@@ -247,7 +249,8 @@ els.btnNewProject.addEventListener('click', () => {
       chapters: [],
       selectedChapterIndex: 0,
       isRendering: false,
-      fastAudioCopy: true
+      fastAudioCopy: true,
+      compatibilityMode: false
     });
     // Reset transition UI
     els.transitionSelect.value = 'fade';
@@ -292,6 +295,7 @@ els.btnNewProject.addEventListener('click', () => {
     els.introFadeSlider.value = 10;
     els.introFadeVal.textContent = '1.0s';
     els.fastAudioToggle.checked = true;
+    els.compatibilityToggle.checked = false;
 
     els.blurSlider.value = 40;
     els.blurVal.textContent = '40px';
@@ -1475,6 +1479,7 @@ async function beginRender() {
     introHasAudio: state.introHasAudio,
     codec: state.codec,
     fastAudioCopy: state.fastAudioCopy,
+    forceLegacyRender: state.compatibilityMode,
     crf: 18
   };
 
@@ -1726,6 +1731,7 @@ function saveSession() {
     introHasAudio: state.introHasAudio,
     introDurationRaw: state.introDurationRaw,
     fastAudioCopy: state.fastAudioCopy,
+    compatibilityMode: state.compatibilityMode,
     accentColor: state.accentColor,
     isCustomColor: state.isCustomColor
   };
@@ -1791,6 +1797,10 @@ async function restoreSession() {
       if (d0.fastAudioCopy !== undefined) {
         state.fastAudioCopy = d0.fastAudioCopy;
         els.fastAudioToggle.checked = d0.fastAudioCopy;
+      }
+      if (d0.compatibilityMode !== undefined) {
+        state.compatibilityMode = d0.compatibilityMode;
+        els.compatibilityToggle.checked = d0.compatibilityMode;
       }
     } catch (_) {}
   }
@@ -1969,6 +1979,11 @@ els.codecSelect.addEventListener('change', () => {
 
 els.fastAudioToggle.addEventListener('change', () => {
   state.fastAudioCopy = els.fastAudioToggle.checked;
+  saveSession();
+});
+
+els.compatibilityToggle.addEventListener('change', () => {
+  state.compatibilityMode = els.compatibilityToggle.checked;
   saveSession();
 });
 

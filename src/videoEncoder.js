@@ -764,4 +764,19 @@ function getVideoDuration(videoPath) {
   });
 }
 
-module.exports = { renderVideo, getAudioDuration, getVideoDuration };
+const { renderVideo: renderVideoOptimized } = require('./renderPipeline');
+
+async function renderVideoDispatch(params, callbacks) {
+  if (params.forceLegacyRender) {
+    callbacks.onLog('\n🛡 Compatibility Mode: using the legacy constant-30fps renderer.');
+    return renderVideo(params, callbacks);
+  }
+  return renderVideoOptimized(params, callbacks);
+}
+
+module.exports = {
+  renderVideo: renderVideoDispatch,
+  renderVideoLegacy: renderVideo,
+  getAudioDuration,
+  getVideoDuration
+};

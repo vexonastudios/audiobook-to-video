@@ -49,11 +49,26 @@
   const FRAME_WIDTH = 1920;
   const FRAME_HEIGHT = 1080;
   const RENDER_SCALE = FRAME_WIDTH / LOGICAL_WIDTH;
+  let renderBaseParams = {};
 
   function configureRenderContext(ctx) {
     ctx.setTransform(RENDER_SCALE, 0, 0, RENDER_SCALE, 0, 0);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
+  }
+
+  window.setRenderBaseParams = function(params) {
+    renderBaseParams = params || {};
+    return true;
+  };
+
+  async function writeCanvasPng(filePath) {
+    const canvas = document.getElementById('mainCanvas');
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob(value => value ? resolve(value) : reject(new Error('Canvas PNG encoding failed')), 'image/png');
+    });
+    const bytes = Buffer.from(await blob.arrayBuffer());
+    await require('fs').promises.writeFile(filePath, bytes);
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -464,6 +479,90 @@
       ctx.fillRect(0, 0, W, H);
     }
 
+    return true;
+  };
+
+  window.renderFrameToFile = async function(params, filePath) {
+    await window.renderFrame({ ...renderBaseParams, ...params });
+    await writeCanvasPng(filePath);
+    return true;
+  };
+
+  // Render transitions from the already-composited chapter stills. This avoids
+  // redrawing the blurred cover, typography, and logo for every transition frame.
+  window.renderTransitionFrameToFile = async function(params, filePath) {
+    const {
+      fromPath,
+      toPath,
+      transitionStyle = 'fade',
+      alpha = 0
+    } = params;
+
+    const { pathToFileURL } = require('url');
+    const fromImg = await loadImage(pathToFileURL(fromPath).href);
+    const toImg = await loadImage(pathToFileURL(toPath).href);
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d');
+    const W = FRAME_WIDTH, H = FRAME_HEIGHT;
+    const t = Math.max(0, Math.min(1, alpha));
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.filter = 'none';
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.clearRect(0, 0, W, H);
+
+    const drawScaled = (img, scale = 1) => {
+      ctx.save();
+      ctx.translate(W / 2, H / 2);
+      ctx.scale(scale, scale);
+      ctx.drawImage(img, -W / 2, -H / 2, W, H);
+      ctx.restore();
+    };
+
+    if (transitionStyle === 'dissolve') {
+      ctx.globalAlpha = 1 - t;
+      ctx.drawImage(fromImg, 0, 0, W, H);
+      ctx.globalAlpha = t;
+      ctx.drawImage(toImg, 0, 0, W, H);
+      ctx.globalAlpha = 1;
+
+    } else if (transitionStyle === 'flare') {
+      ctx.drawImage(t < 0.5 ? fromImg : toImg, 0, 0, W, H);
+      const flareAlpha = t <= 0.5 ? t * 2 : (1 - t) * 2;
+      const grd = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W * 0.75);
+      grd.addColorStop(0, `rgba(255,255,255,${flareAlpha})`);
+      grd.addColorStop(0.4, `rgba(255,240,200,${flareAlpha * 0.9})`);
+      grd.addColorStop(1, `rgba(255,220,160,${flareAlpha * 0.4})`);
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, W, H);
+
+    } else if (transitionStyle === 'zoom') {
+      if (t <= 0.5) {
+        const local = t * 2;
+        drawScaled(fromImg, 1 + local * 0.18);
+        ctx.fillStyle = `rgba(0,0,0,${local})`;
+      } else {
+        const local = (t - 0.5) * 2;
+        drawScaled(toImg, 1.18 - local * 0.18);
+        ctx.fillStyle = `rgba(0,0,0,${1 - local})`;
+      }
+      ctx.fillRect(0, 0, W, H);
+
+    } else {
+      // Fade through black.
+      if (t <= 0.5) {
+        ctx.drawImage(fromImg, 0, 0, W, H);
+        ctx.fillStyle = `rgba(0,0,0,${t * 2})`;
+      } else {
+        ctx.drawImage(toImg, 0, 0, W, H);
+        ctx.fillStyle = `rgba(0,0,0,${(1 - t) * 2})`;
+      }
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    await writeCanvasPng(filePath);
     return true;
   };
 

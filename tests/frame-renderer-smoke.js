@@ -13,6 +13,8 @@ async function run() {
 
   const chapterOnePath = path.join(outputDir, 'chapter-one.png');
   const chapterTwoPath = path.join(outputDir, 'chapter-two.png');
+  const promotionPath = path.join(outputDir, 'print-promotion.png');
+  const promotionOverlayPath = path.join(outputDir, 'print-promotion-overlay.png');
   const transitionPaths = ['fade', 'dissolve', 'flare', 'zoom'].map(style => ({
     style,
     path: path.join(outputDir, `transition-${style}.png`)
@@ -67,8 +69,23 @@ async function run() {
         })}, ${JSON.stringify(transition.path)})`
       );
     }
+    await window.webContents.executeJavaScript(
+      `window.renderPromotionFrameToFile(${JSON.stringify({
+        basePath: chapterOnePath,
+        visibility: 1
+      })}, ${JSON.stringify(promotionPath)})`
+    );
+    await window.webContents.executeJavaScript(
+      `window.renderPromotionOverlayToFile({}, ${JSON.stringify(promotionOverlayPath)})`
+    );
 
-    for (const outputPath of [chapterOnePath, chapterTwoPath, ...transitionPaths.map(item => item.path)]) {
+    for (const outputPath of [
+      chapterOnePath,
+      chapterTwoPath,
+      promotionPath,
+      promotionOverlayPath,
+      ...transitionPaths.map(item => item.path)
+    ]) {
       const metadata = await sharp(outputPath).metadata();
       if (metadata.width !== 1920 || metadata.height !== 1080) {
         throw new Error(`${path.basename(outputPath)} was ${metadata.width}x${metadata.height}, expected 1920x1080`);
@@ -77,6 +94,15 @@ async function run() {
 
     if (fs.readFileSync(chapterOnePath).equals(fs.readFileSync(chapterTwoPath))) {
       throw new Error('Distinct chapter parameters produced identical PNG files.');
+    }
+    if (fs.readFileSync(chapterOnePath).equals(fs.readFileSync(promotionPath))) {
+      throw new Error('Print promotion frame did not differ from its base chapter frame.');
+    }
+    const overlayMetadata = await sharp(promotionOverlayPath).metadata();
+    if (!overlayMetadata.hasAlpha) throw new Error('Print promotion overlay did not preserve transparency.');
+    const overlayStats = await sharp(promotionOverlayPath).stats();
+    if (!overlayStats.channels[3] || overlayStats.channels[3].max === 0) {
+      throw new Error('Print promotion overlay was fully transparent.');
     }
 
     console.log(`Frame renderer smoke test passed: ${outputDir}`);

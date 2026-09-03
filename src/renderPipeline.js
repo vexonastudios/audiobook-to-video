@@ -48,6 +48,9 @@ async function renderVideo(params, callbacks) {
     introFadeDuration = 1,
     codec = 'h264',
     fastAudioCopy = true,
+    printPromoEnabled = true,
+    printPromoStart = 30,
+    printPromoDuration = 8,
     titleFontSize = 0,
     audioCacheDir = path.join(os.tmpdir(), 'audiobook-video-generator-audio-cache')
   } = params;
@@ -58,12 +61,16 @@ async function renderVideo(params, callbacks) {
     prepareFrameRenderer,
     renderFrameToFile,
     renderTransitionFrameToFile,
+    renderPromotionFrameToFile,
     isCancelled = () => false
   } = callbacks;
 
   if (!chapters || chapters.length === 0) throw new Error('No chapters were provided for rendering.');
   if (!prepareFrameRenderer || !renderFrameToFile || !renderTransitionFrameToFile) {
     throw new Error('Optimized frame renderer callbacks are unavailable.');
+  }
+  if (printPromoEnabled && !renderPromotionFrameToFile) {
+    throw new Error('Print promotion renderer callback is unavailable.');
   }
 
   const renderStartedAt = Date.now();
@@ -181,7 +188,7 @@ async function renderVideo(params, callbacks) {
       return groups;
     });
 
-    const timelineEntries = buildTimelineEntries({
+    let timelineEntries = buildTimelineEntries({
       chapters,
       chapterFramePaths,
       transitionFrames,
@@ -190,11 +197,51 @@ async function renderVideo(params, callbacks) {
       totalDuration
     });
 
+    if (printPromoEnabled) {
+      timelineEntries = await timed('Print promotion rendering', async () => {
+        const timing = resolvePrintPromotionTiming(totalDuration, printPromoStart, printPromoDuration);
+        if (!timing) {
+          onLog('⚠ Print promotion skipped because the audiobook is too short.');
+          return timelineEntries;
+        }
+
+        const promotionDir = path.join(tmpDir, 'print_promotion');
+        fs.mkdirSync(promotionDir, { recursive: true });
+        const samplePlan = buildPromotionSamplePlan(timelineEntries, timing.start, timing.duration);
+        const promotionEntries = [];
+        onLog(`\n📚 Rendering print-edition lower third at ${formatTimestamp(timing.start)} (${timing.duration.toFixed(1)}s)...`);
+
+        for (let i = 0; i < samplePlan.length; i++) {
+          if (cancelled()) throw new Error('RENDER_CANCELLED');
+          const sample = samplePlan[i];
+          const framePath = path.join(promotionDir, `promo_${String(i).padStart(4, '0')}.png`);
+          await renderPromotionFrameToFile({
+            basePath: sample.basePath,
+            visibility: sample.visibility
+          }, framePath);
+          promotionEntries.push({
+            path: framePath,
+            duration: sample.duration,
+            kind: 'promotion'
+          });
+          reportProgress(25 + ((i + 1) / samplePlan.length) * 5, `Rendered promotion frame ${i + 1} / ${samplePlan.length}`);
+        }
+
+        return replaceTimelineRange(
+          timelineEntries,
+          timing.start,
+          timing.start + timing.duration,
+          promotionEntries
+        );
+      });
+    }
+
     let visualVideoPath;
     let finalDuration = totalDuration;
 
     if (introClipPath && introStyle === 'overlap') {
-      const safeFade = Math.min(overlapFade, Math.max(FRAME_DURATION, timelineEntries[0].duration - FRAME_DURATION));
+      const openingChapterDuration = chapters[0].endTime - chapters[0].startTime;
+      const safeFade = Math.min(overlapFade, Math.max(FRAME_DURATION, openingChapterDuration - FRAME_DURATION));
       if (safeFade < overlapFade) onLog(`⚠ Intro fade shortened to ${safeFade.toFixed(2)}s to fit the opening chapter.`);
 
       visualVideoPath = await timed('Intro overlap video assembly', async () => {
@@ -360,6 +407,97 @@ function trimTimelineEntries(entries, trimSeconds) {
   return result;
 }
 
+function resolvePrintPromotionTiming(totalDuration, requestedStart = 30, requestedDuration = 8) {
+  if (!Number.isFinite(totalDuration) || !Number.isFinite(requestedStart)) return null;
+  const start = Math.max(0, requestedStart);
+  const availableDuration = totalDuration - start - 1;
+  if (availableDuration < 2) return null;
+  return {
+    start,
+    duration: Math.min(Math.max(2, requestedDuration), availableDuration)
+  };
+}
+
+function buildPromotionSamplePlan(entries, start, duration) {
+  const indexedEntries = [];
+  let cursor = 0;
+  for (const entry of entries) {
+    indexedEntries.push({ entry, start: cursor, end: cursor + entry.duration });
+    cursor += entry.duration;
+  }
+
+  const fadeDuration = Math.min(0.6, duration / 3);
+  const holdEnd = duration - fadeDuration;
+  const samples = [];
+  let elapsed = 0;
+  let baseIndex = 0;
+
+  while (elapsed < duration - 1e-9) {
+    const absoluteTime = start + elapsed;
+    while (baseIndex < indexedEntries.length - 1 && absoluteTime >= indexedEntries[baseIndex].end - 1e-9) {
+      baseIndex++;
+    }
+
+    const indexed = indexedEntries[baseIndex];
+    const baseRemaining = Math.max(FRAME_DURATION, indexed.end - absoluteTime);
+    const phaseEnd = elapsed < fadeDuration
+      ? fadeDuration
+      : (elapsed < holdEnd ? holdEnd : duration);
+    const animated = elapsed < fadeDuration || elapsed >= holdEnd;
+    const step = Math.min(
+      animated ? FRAME_DURATION : Math.max(FRAME_DURATION, phaseEnd - elapsed),
+      baseRemaining,
+      duration - elapsed
+    );
+    const midpoint = elapsed + step / 2;
+    let visibility = 1;
+    if (midpoint < fadeDuration) {
+      const t = Math.max(0, Math.min(1, midpoint / fadeDuration));
+      visibility = 1 - Math.pow(1 - t, 3);
+    } else if (midpoint > holdEnd) {
+      const t = Math.max(0, Math.min(1, (duration - midpoint) / fadeDuration));
+      visibility = 1 - Math.pow(1 - t, 3);
+    }
+
+    samples.push({
+      basePath: indexed.entry.path,
+      duration: step,
+      visibility
+    });
+    elapsed += step;
+  }
+
+  const delta = duration - samples.reduce((sum, sample) => sum + sample.duration, 0);
+  if (samples.length > 0) samples[samples.length - 1].duration += delta;
+  return samples;
+}
+
+function replaceTimelineRange(entries, start, end, replacementEntries) {
+  const totalDuration = sumEntryDurations(entries);
+  return [
+    ...sliceTimelineRange(entries, 0, start),
+    ...replacementEntries,
+    ...sliceTimelineRange(entries, end, totalDuration)
+  ];
+}
+
+function sliceTimelineRange(entries, rangeStart, rangeEnd) {
+  const result = [];
+  let cursor = 0;
+  for (const entry of entries) {
+    const entryStart = cursor;
+    const entryEnd = cursor + entry.duration;
+    const overlapStart = Math.max(entryStart, rangeStart);
+    const overlapEnd = Math.min(entryEnd, rangeEnd);
+    if (overlapEnd - overlapStart > 1e-9) {
+      result.push({ ...entry, duration: overlapEnd - overlapStart });
+    }
+    cursor = entryEnd;
+    if (cursor >= rangeEnd - 1e-9) break;
+  }
+  return result;
+}
+
 async function encodeVisualTimeline({
   entries,
   expectedDuration,
@@ -410,7 +548,7 @@ function writeTimelineManifest(entries, manifestPath) {
 
 function splitLongHoldEntry(entry) {
   const boundarySampleDuration = FRAME_DURATION * 2;
-  if (entry.kind !== 'still' || entry.duration <= boundarySampleDuration) {
+  if (entry.kind === 'transition' || entry.duration <= boundarySampleDuration) {
     return [{ ...entry }];
   }
 
@@ -938,6 +1076,13 @@ function formatElapsed(seconds) {
   if (seconds < 60) return `${seconds.toFixed(1)}s`;
   const minutes = Math.floor(seconds / 60);
   return `${minutes}m ${Math.round(seconds % 60)}s`;
+}
+
+function formatTimestamp(seconds) {
+  const whole = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(whole / 60);
+  const remainder = whole % 60;
+  return `${minutes}:${String(remainder).padStart(2, '0')}`;
 }
 
 function formatBytes(bytes) {

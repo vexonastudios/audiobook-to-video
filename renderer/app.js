@@ -55,6 +55,7 @@ const state = {
   isRendering: false,
   codec: 'h264',             // 'h264' | 'h265'
   fastAudioCopy: true,
+  printPromoEnabled: true,
   compatibilityMode: false,  // use the legacy constant-30fps renderer
   gpuStatus: 'unknown',       // 'unknown' | 'gpu' | 'cpu'
   gpuName: 'GPU'              // actual GPU name detected at runtime
@@ -114,6 +115,7 @@ const els = {
   introFadeRow: $('intro-fade-row'),
   introFadeSlider: $('intro-fade-slider'),
   introFadeVal: $('intro-fade-val'),
+  printPromoToggle: $('print-promo-toggle'),
 
   // Sliders
   blurSlider: $('blur-slider'),
@@ -250,6 +252,7 @@ els.btnNewProject.addEventListener('click', () => {
       selectedChapterIndex: 0,
       isRendering: false,
       fastAudioCopy: true,
+      printPromoEnabled: true,
       compatibilityMode: false
     });
     // Reset transition UI
@@ -295,6 +298,7 @@ els.btnNewProject.addEventListener('click', () => {
     els.introFadeSlider.value = 10;
     els.introFadeVal.textContent = '1.0s';
     els.fastAudioToggle.checked = true;
+    els.printPromoToggle.checked = true;
     els.compatibilityToggle.checked = false;
 
     els.blurSlider.value = 40;
@@ -336,7 +340,8 @@ els.btnSaveProject.addEventListener('click', async () => {
     chaptersText: els.chaptersTextarea.value,
     selectedChapterIndex: state.selectedChapterIndex,
     transitionStyle: state.transitionStyle,
-    transitionDuration: state.transitionDuration
+    transitionDuration: state.transitionDuration,
+    printPromoEnabled: state.printPromoEnabled
   };
   const success = await window.api.saveProjectFile(JSON.stringify(data, null, 2));
   if (success) addLog('✅ Project saved successfully.', 'ok');
@@ -1479,6 +1484,7 @@ async function beginRender() {
     introHasAudio: state.introHasAudio,
     codec: state.codec,
     fastAudioCopy: state.fastAudioCopy,
+    printPromoEnabled: state.printPromoEnabled,
     forceLegacyRender: state.compatibilityMode,
     crf: 18
   };
@@ -1731,6 +1737,7 @@ function saveSession() {
     introHasAudio: state.introHasAudio,
     introDurationRaw: state.introDurationRaw,
     fastAudioCopy: state.fastAudioCopy,
+    printPromoEnabled: state.printPromoEnabled,
     compatibilityMode: state.compatibilityMode,
     accentColor: state.accentColor,
     isCustomColor: state.isCustomColor
@@ -1798,6 +1805,8 @@ async function restoreSession() {
         state.fastAudioCopy = d0.fastAudioCopy;
         els.fastAudioToggle.checked = d0.fastAudioCopy;
       }
+      state.printPromoEnabled = d0.printPromoEnabled !== false;
+      els.printPromoToggle.checked = state.printPromoEnabled;
       if (d0.compatibilityMode !== undefined) {
         state.compatibilityMode = d0.compatibilityMode;
         els.compatibilityToggle.checked = d0.compatibilityMode;
@@ -1979,6 +1988,11 @@ els.codecSelect.addEventListener('change', () => {
 
 els.fastAudioToggle.addEventListener('change', () => {
   state.fastAudioCopy = els.fastAudioToggle.checked;
+  saveSession();
+});
+
+els.printPromoToggle.addEventListener('change', () => {
+  state.printPromoEnabled = els.printPromoToggle.checked;
   saveSession();
 });
 

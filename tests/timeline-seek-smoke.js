@@ -45,6 +45,10 @@ async function main() {
         .toFile(framePath);
       framePaths.set(color.name, framePath);
     }
+    const promotionPath = path.join(root, 'promotion.png');
+    await sharp({ create: { width: 1920, height: 1080, channels: 3, background: { r: 200, g: 20, b: 180 } } })
+      .png()
+      .toFile(promotionPath);
 
     const audioPath = path.join(root, 'audio.m4a');
     run(ffmpegPath, [
@@ -73,6 +77,7 @@ async function main() {
         fs.copyFileSync(framePaths.get(chapter.title), targetPath);
       },
       renderTransitionFrameToFile: async () => {},
+      renderPromotionFrameToFile: async (_, targetPath) => fs.copyFileSync(promotionPath, targetPath),
       isCancelled: () => false
     });
 
@@ -81,8 +86,10 @@ async function main() {
       { timestamp: 2, expected: colors[1].rgb },
       { timestamp: 5, expected: colors[2].rgb },
       { timestamp: 19, expected: colors[2].rgb },
-      { timestamp: 33, expected: colors[2].rgb },
-      { timestamp: 35, expected: colors[3].rgb },
+      { timestamp: 29, expected: colors[2].rgb },
+      { timestamp: 31, expected: { r: 200, g: 20, b: 180 } },
+      { timestamp: 35, expected: { r: 200, g: 20, b: 180 } },
+      { timestamp: 37, expected: { r: 200, g: 20, b: 180 } },
       { timestamp: 39, expected: colors[3].rgb }
     ];
     for (const checkpoint of checkpoints) {

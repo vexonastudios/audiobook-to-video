@@ -5,10 +5,11 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test": "npm run test:frame-renderer && npm run test:render-pipeline && npm run test:timeline-seek",
+    "test": "npm run test:frame-renderer && npm run test:render-pipeline && npm run test:timeline-seek && npm run test:legacy-promotion",
     "test:frame-renderer": "electron tests/frame-renderer-smoke.js",
     "test:render-pipeline": "node tests/render-pipeline-smoke.js",
     "test:timeline-seek": "node tests/timeline-seek-smoke.js",
+    "test:legacy-promotion": "electron tests/legacy-promotion-smoke.js",
     "dist": "electron-builder",
     "release": "electron-builder --publish always"
   },

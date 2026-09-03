@@ -209,6 +209,19 @@
       </div>
 
       <div class="panel-section">
+        <div class="section-header-toggle">
+          <h3 class="section-title">Print Edition Promotion</h3>
+          <label class="toggle-switch" title="Show a print and Kindle promotion 30 seconds into the audiobook">
+            <input type="checkbox" id="print-promo-toggle" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <p style="font-size:10.5px;color:var(--text-muted);line-height:1.45;margin-top:4px">
+          At 0:30, briefly shows the cover with “Kindle &amp; Paperback Editions” and directs viewers to the link in the description.
+        </p>
+      </div>
+
+      <div class="panel-section">
         <h3 class="section-title">Background Style</h3>
 
         <div class="slider-row">
@@ -460,7 +473,7 @@
         <p>Use the sliders on the left to adjust background blur and opacity. You can also pick a <strong>Transition Style</strong> (like Fade, Cross Dissolve, or Zoom Blur) and set its duration. Use the <strong>Preview</strong> section's dropdown to see exactly what each chapter will look like.</p>
 
         <h3>5. Render Video</h3>
-        <p>Once your fields are filled and chapters are parsed, click <strong>Render Video</strong>. The optimized renderer stores one high-resolution still per chapter and uses your <strong>NVIDIA RTX GPU (NVENC)</strong> for video encoding when available. Choose <strong>H.264</strong> for max compatibility or <strong>H.265 HEVC</strong> for ~40% smaller file sizes. Use <strong>Compatibility Mode</strong> only if a particular media file has trouble with the optimized renderer.</p>
+        <p>Once your fields are filled and chapters are parsed, click <strong>Render Video</strong>. The optimized renderer stores one high-resolution still per chapter and uses your <strong>NVIDIA RTX GPU (NVENC)</strong> for video encoding when available. When <strong>Print Edition Promotion</strong> is enabled, a lower-third card appears 30 seconds into the audiobook. Choose <strong>H.264</strong> for max compatibility or <strong>H.265 HEVC</strong> for ~40% smaller file sizes. Use <strong>Compatibility Mode</strong> only if a particular media file has trouble with the optimized renderer.</p>
       </div>
     </div>
   </div>

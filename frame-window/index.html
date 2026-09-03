@@ -394,6 +394,85 @@
     }
   }
 
+  async function drawPrintPromotion(ctx, params = {}) {
+    const visibility = Math.max(0, Math.min(1, params.visibility ?? 1));
+    if (visibility <= 0) return;
+
+    const coverDataURL = params.coverDataURL || renderBaseParams.coverDataURL;
+    const accentColor = params.accentColor || renderBaseParams.accentColor || [201, 169, 110];
+    if (!coverDataURL) return;
+
+    const coverImg = await loadImage(coverDataURL);
+    const [ar, ag, ab] = accentColor;
+    const eased = 1 - Math.pow(1 - visibility, 3);
+    const cardX = 790;
+    const cardY = 828 + (1 - eased) * 56;
+    const cardW = 1100;
+    const cardH = 220;
+    const thumbX = cardX + 28;
+    const thumbY = cardY + 20;
+    const thumbW = 122;
+    const thumbH = 180;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = eased;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.68)';
+    ctx.shadowBlur = 42;
+    ctx.shadowOffsetY = 14;
+    roundRect(ctx, cardX, cardY, cardW, cardH, 20);
+    ctx.fillStyle = '#120f0d';
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+
+    roundRect(ctx, cardX, cardY, cardW, cardH, 20);
+    ctx.strokeStyle = `rgba(${ar}, ${ag}, ${ab}, 0.82)`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = `rgb(${ar}, ${ag}, ${ab})`;
+    roundRect(ctx, cardX, cardY + 18, 7, cardH - 36, 4);
+    ctx.fill();
+
+    ctx.save();
+    roundRect(ctx, thumbX, thumbY, thumbW, thumbH, 7);
+    ctx.clip();
+    ctx.fillStyle = '#090807';
+    ctx.fillRect(thumbX, thumbY, thumbW, thumbH);
+    const coverScale = Math.min(thumbW / coverImg.naturalWidth, thumbH / coverImg.naturalHeight);
+    const coverW = coverImg.naturalWidth * coverScale;
+    const coverH = coverImg.naturalHeight * coverScale;
+    ctx.drawImage(
+      coverImg,
+      thumbX + (thumbW - coverW) / 2,
+      thumbY + (thumbH - coverH) / 2,
+      coverW,
+      coverH
+    );
+    ctx.restore();
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    const textX = cardX + 184;
+
+    ctx.font = '500 25px "EB Garamond"';
+    ctx.fillStyle = `rgb(${ar}, ${ag}, ${ab})`;
+    drawTracked(ctx, 'AVAILABLE ON AMAZON', textX + 149, cardY + 50, 2.2);
+
+    ctx.font = '500 46px "EB Garamond"';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.98)';
+    ctx.fillText('Kindle & Paperback Editions', textX, cardY + 111);
+
+    ctx.font = '400 28px "EB Garamond"';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+    ctx.fillText('Find the book link in the description', textX, cardY + 164);
+    ctx.restore();
+  }
+
   // ─────────────────────────────────────────────────────────────
   // Public renderFrame — handles transitions via blendAlpha
   // ─────────────────────────────────────────────────────────────
@@ -484,6 +563,33 @@
 
   window.renderFrameToFile = async function(params, filePath) {
     await window.renderFrame({ ...renderBaseParams, ...params });
+    await writeCanvasPng(filePath);
+    return true;
+  };
+
+  window.renderPromotionFrameToFile = async function(params, filePath) {
+    const { pathToFileURL } = require('url');
+    const baseImg = await loadImage(pathToFileURL(params.basePath).href);
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.filter = 'none';
+    ctx.clearRect(0, 0, FRAME_WIDTH, FRAME_HEIGHT);
+    ctx.drawImage(baseImg, 0, 0, FRAME_WIDTH, FRAME_HEIGHT);
+    await drawPrintPromotion(ctx, { ...renderBaseParams, ...params });
+    await writeCanvasPng(filePath);
+    return true;
+  };
+
+  window.renderPromotionOverlayToFile = async function(params, filePath) {
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.filter = 'none';
+    ctx.clearRect(0, 0, FRAME_WIDTH, FRAME_HEIGHT);
+    await drawPrintPromotion(ctx, { ...renderBaseParams, ...params, visibility: 1 });
     await writeCanvasPng(filePath);
     return true;
   };

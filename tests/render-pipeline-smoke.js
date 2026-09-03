@@ -53,6 +53,7 @@ async function runScenario({
     prepareFrameRenderer: async () => true,
     renderFrameToFile: async (_, targetPath) => fs.copyFileSync(stillPath, targetPath),
     renderTransitionFrameToFile: async (_, targetPath) => fs.copyFileSync(stillPath, targetPath),
+    renderPromotionFrameToFile: async (_, targetPath) => fs.copyFileSync(stillPath, targetPath),
     isCancelled: () => false
   });
 
@@ -146,6 +147,7 @@ async function main() {
         prepareFrameRenderer: async () => true,
         renderFrameToFile: async (_, targetPath) => fs.copyFileSync(stillPath, targetPath),
         renderTransitionFrameToFile: async () => {},
+        renderPromotionFrameToFile: async () => {},
         isCancelled: () => true
       });
     } catch (error) {

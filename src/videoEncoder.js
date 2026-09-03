@@ -70,11 +70,20 @@ async function renderVideo(params, callbacks) {
     introFadeDuration = 1.0,
     codec = 'h264',   // 'h264' = h264_nvenc/libx264 | 'h265' = hevc_nvenc/libx265
     fastAudioCopy = true,
+    printPromoEnabled = true,
+    printPromoStart = 30,
+    printPromoDuration = 8,
     titleFontSize = 0,
     bgOffsetY = 0
   } = params;
 
-  const { onProgress, onLog, renderFrame, isCancelled = () => false } = callbacks;
+  const {
+    onProgress,
+    onLog,
+    renderFrame,
+    renderPromotionOverlayToFile,
+    isCancelled = () => false
+  } = callbacks;
   const tmpDir = path.join(os.tmpdir(), `vexona-render-${Date.now()}`);
   fs.mkdirSync(tmpDir, { recursive: true });
 
@@ -259,12 +268,43 @@ async function renderVideo(params, callbacks) {
       '-y', mergedVideoPath
     ]);
 
+    const totalDuration = chapters[chapters.length - 1].endTime;
+    let videoForMux = mergedVideoPath;
+    if (printPromoEnabled) {
+      if (!renderPromotionOverlayToFile) throw new Error('Print promotion renderer callback is unavailable.');
+      const timing = resolveLegacyPrintPromotionTiming(totalDuration, printPromoStart, printPromoDuration);
+      if (timing) {
+        onLog(`\n📚 Adding print-edition lower third at ${formatSec(timing.start)}...`);
+        onProgress({ phase: 'encoding', percent: 92, label: 'Adding print-edition promotion...' });
+        const overlayPath = path.join(tmpDir, 'print_promotion_overlay.png');
+        const promotedVideoPath = path.join(tmpDir, 'merged_video_with_promotion.mp4');
+        await renderPromotionOverlayToFile({
+          coverDataURL,
+          accentColor,
+          visibility: 1
+        }, overlayPath);
+        await encodeLegacyPrintPromotion({
+          videoPath: mergedVideoPath,
+          overlayPath,
+          outputPath: promotedVideoPath,
+          start: timing.start,
+          duration: timing.duration,
+          totalDuration,
+          useGPU,
+          codec,
+          crf,
+          isCancelled
+        });
+        videoForMux = promotedVideoPath;
+      } else {
+        onLog('⚠ Print promotion skipped because the audiobook is too short.');
+      }
+    }
+
     // ── 6. Mux audio (video -c copy, only audio encodes) ─────────
     onLog('\n🔊 Muxing audio...');
     onProgress({ phase: 'encoding', percent: 94, label: 'Muxing audio...' });
 
-    const totalDuration = chapters[chapters.length - 1].endTime;
-    
     const ext = path.extname(wavPath).toLowerCase();
     const hasIntro = !!introClipPath;
     const isSequentialIntro = hasIntro && introStyle === 'push';
@@ -282,7 +322,7 @@ async function renderVideo(params, callbacks) {
 
     await runFFmpegWithProgress({
       args: [
-        '-i', mergedVideoPath,
+        '-i', videoForMux,
         '-i', wavPath,
         '-c:v', 'copy',
         ...audioCodecArgs,
@@ -635,6 +675,56 @@ function encodeFrameSequence({ frameDir, outputPath, fps, duration, crf, useGPU,
     '-r', String(fps),
     '-video_track_timescale', '90000',
     '-an', '-y', outputPath
+  ], isCancelled);
+}
+
+function resolveLegacyPrintPromotionTiming(totalDuration, requestedStart, requestedDuration) {
+  if (!Number.isFinite(totalDuration) || !Number.isFinite(requestedStart)) return null;
+  const start = Math.max(0, requestedStart);
+  const availableDuration = totalDuration - start - 1;
+  if (availableDuration < 2) return null;
+  return {
+    start,
+    duration: Math.min(Math.max(2, requestedDuration), availableDuration)
+  };
+}
+
+function encodeLegacyPrintPromotion({
+  videoPath,
+  overlayPath,
+  outputPath,
+  start,
+  duration,
+  totalDuration,
+  useGPU,
+  codec,
+  crf,
+  isCancelled
+}) {
+  const fadeDuration = Math.min(0.6, duration / 3);
+  const filter =
+    `[1:v]format=rgba,fade=t=in:st=0:d=${fadeDuration.toFixed(3)}:alpha=1,` +
+    `fade=t=out:st=${(duration - fadeDuration).toFixed(3)}:d=${fadeDuration.toFixed(3)}:alpha=1,` +
+    `setpts=PTS+${start.toFixed(6)}/TB[promo];` +
+    `[0:v][promo]overlay=0:0:eof_action=pass:shortest=0[vout]`;
+  const videoArgs = useGPU
+    ? [
+        '-c:v', codec === 'h265' ? 'hevc_nvenc' : 'h264_nvenc',
+        '-preset', 'p4', '-tune', 'hq', '-rc', 'vbr', '-cq', String(crf)
+      ]
+    : [
+        '-c:v', codec === 'h265' ? 'libx265' : 'libx264',
+        '-preset', 'fast', '-crf', String(crf)
+      ];
+
+  return runFFmpeg([
+    '-i', videoPath,
+    '-loop', '1', '-framerate', String(OUTPUT_FPS), '-t', duration.toFixed(6), '-i', overlayPath,
+    '-filter_complex', filter,
+    '-map', '[vout]', '-t', totalDuration.toFixed(6),
+    ...videoArgs,
+    '-pix_fmt', 'yuv420p', '-r', String(OUTPUT_FPS),
+    '-video_track_timescale', '90000', '-an', '-y', outputPath
   ], isCancelled);
 }
 

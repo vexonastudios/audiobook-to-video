@@ -360,6 +360,8 @@ ipcMain.handle('start-render', async (event, params) => {
       prepareFrameRenderer,
       renderFrameToFile,
       renderTransitionFrameToFile,
+      renderPromotionFrameToFile,
+      renderPromotionOverlayToFile,
       isCancelled: () => renderCancelled
     });
     if (mainWindow) mainWindow.webContents.send('render-complete', { success: true });
@@ -451,5 +453,19 @@ async function renderTransitionFrameToFile(params, outputPath) {
   await ensureFrameWindowReady();
   return frameWindow.webContents.executeJavaScript(
     `window.renderTransitionFrameToFile(${JSON.stringify(params)}, ${JSON.stringify(outputPath)})`
+  );
+}
+
+async function renderPromotionFrameToFile(params, outputPath) {
+  await ensureFrameWindowReady();
+  return frameWindow.webContents.executeJavaScript(
+    `window.renderPromotionFrameToFile(${JSON.stringify(params)}, ${JSON.stringify(outputPath)})`
+  );
+}
+
+async function renderPromotionOverlayToFile(params, outputPath) {
+  await ensureFrameWindowReady();
+  return frameWindow.webContents.executeJavaScript(
+    `window.renderPromotionOverlayToFile(${JSON.stringify(params)}, ${JSON.stringify(outputPath)})`
   );
 }

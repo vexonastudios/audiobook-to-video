@@ -3,6 +3,14 @@ const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 
+// Use the multi-resolution ICO for Windows window/taskbar rendering. Other
+// platforms use the high-resolution PNG generated from the same SVG source.
+const appIconPath = path.join(
+  __dirname,
+  'assets',
+  process.platform === 'win32' ? 'icon.ico' : 'icon.png'
+);
+
 // Hardware acceleration is ENABLED intentionally — the GPU accelerates
 // the hidden frame-window canvas renderer (the slowest step of the pipeline).
 let mainWindow = null;
@@ -22,7 +30,7 @@ function createMainWindow() {
     backgroundColor: '#0d0d0f',
     frame: false,
     titleBarStyle: 'hidden',
-    icon: path.join(__dirname, 'assets', 'icon.png'),
+    icon: appIconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -44,7 +52,7 @@ function createFrameWindow() {
     width: 1920,
     height: 1080,
     show: false,
-    icon: path.join(__dirname, 'assets', 'icon.png'),
+    icon: appIconPath,
     webPreferences: {
       contextIsolation: false,
       nodeIntegration: true,

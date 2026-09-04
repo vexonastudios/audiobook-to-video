@@ -55,6 +55,13 @@ To build locally:
 npm run dist
 ```
 
+The application icon is maintained as `assets/icon-source.png`. After changing it,
+regenerate the 1024px PNG and multi-resolution Windows ICO with:
+
+```bash
+npm run icons
+```
+
 ---
 
 ## 🛠️ Tech Stack

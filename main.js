@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
@@ -304,6 +304,18 @@ ipcMain.handle('write-text-file', async (event, { filePath, content }) => {
   }
 });
 
+ipcMain.handle('open-output-file', async (event, filePath) => {
+  if (typeof filePath !== 'string' || path.extname(filePath).toLowerCase() !== '.mp4') {
+    return { success: false, error: 'The completed video path is invalid.' };
+  }
+  if (!fs.existsSync(filePath)) {
+    return { success: false, error: 'The completed video could not be found.' };
+  }
+
+  const error = await shell.openPath(filePath);
+  return error ? { success: false, error } : { success: true };
+});
+
 // ─────────────────────────────────────────────
 // IPC: Audio Duration
 // ─────────────────────────────────────────────
@@ -373,7 +385,10 @@ ipcMain.handle('start-render', async (event, params) => {
       renderPromotionOverlayToFile,
       isCancelled: () => renderCancelled
     });
-    if (mainWindow) mainWindow.webContents.send('render-complete', { success: true });
+    if (mainWindow) mainWindow.webContents.send('render-complete', {
+      success: true,
+      outputPath: params.outputPath
+    });
   } catch (e) {
     const cancelled = renderCancelled || e.message === 'RENDER_CANCELLED';
     renderCancelled = false;

@@ -14,6 +14,7 @@ const state = {
   wavPath: null,
   logoPath: null,
   outputPath: null,
+  lastRenderedOutputPath: null,
   audioDuration: null,
 
   coverDataURL: null,
@@ -182,6 +183,7 @@ const els = {
 
   // Export
   btnExport: $('btn-export'),
+  btnOpenOutput: $('btn-open-output'),
   btnStop: $('btn-stop'),
   codecSelect: $('codec-select'),
   fastAudioToggle: $('fast-audio-toggle'),
@@ -255,6 +257,7 @@ els.btnNewProject.addEventListener('click', () => {
       bgPath: null,
       wavPath: null,
       outputPath: null,
+      lastRenderedOutputPath: null,
       audioDuration: null,
       coverDataURL: null,
       bgDataURL: null,
@@ -324,6 +327,7 @@ els.btnNewProject.addEventListener('click', () => {
 
     els.fpOutputText.textContent = 'Choose output location…';
     els.fpOutput.classList.remove('has-file');
+    els.btnOpenOutput.style.display = 'none';
 
     els.fpIntroText.textContent = 'Choose intro clip…';
     els.fpIntro.classList.remove('has-file');
@@ -688,6 +692,8 @@ els.btnOutput.addEventListener('click', async () => {
   if (!filePath) return;
 
   state.outputPath = filePath;
+  state.lastRenderedOutputPath = null;
+  els.btnOpenOutput.style.display = 'none';
   setFilePicked(els.fpOutput, els.fpOutputText, filePath);
   saveSession();
   checkExportReady();
@@ -1624,7 +1630,9 @@ els.btnExport.addEventListener('click', async () => {
 
 async function beginRender() {
   state.isRendering = true;
+  state.lastRenderedOutputPath = null;
   els.btnExport.disabled = true;
+  els.btnOpenOutput.style.display = 'none';
   els.btnStop.style.display = 'flex';
   els.progressSection.style.display = 'flex';
   els.logBox.style.display = 'block';
@@ -1675,6 +1683,21 @@ els.btnStop.addEventListener('click', async () => {
   addLog('⛔ Cancellation requested — stopping after current segment…', 'err');
 });
 
+els.btnOpenOutput.addEventListener('click', async () => {
+  if (!state.lastRenderedOutputPath) return;
+  els.btnOpenOutput.disabled = true;
+  try {
+    const result = await window.api.openOutputFile(state.lastRenderedOutputPath);
+    if (!result.success) {
+      addLog('⚠ Could not open the completed video: ' + result.error, 'err');
+    }
+  } catch (error) {
+    addLog('⚠ Could not open the completed video: ' + error.message, 'err');
+  } finally {
+    els.btnOpenOutput.disabled = false;
+  }
+});
+
 // Render event listeners are set up once in setupRenderListeners(), called on DOMContentLoaded.
 
 function setupRenderListeners() {
@@ -1708,14 +1731,17 @@ function setupRenderListeners() {
       setProgress(0, '⛔ Render cancelled');
       addLog('⛔ Render stopped by user.', 'err');
     } else if (result.success) {
+      const completedOutputPath = result.outputPath || state.outputPath;
+      state.lastRenderedOutputPath = completedOutputPath;
+      els.btnOpenOutput.style.display = 'flex';
       setProgress(100, '✅ Video exported successfully!');
-      addLog('🎉 Done! Video saved to: ' + state.outputPath, 'ok');
+      addLog('🎉 Done! Video saved to: ' + completedOutputPath, 'ok');
 
       // ── Save chapter markers as a companion .txt file ──────────────
-      if (state.chapters.length > 0 && state.outputPath) {
+      if (state.chapters.length > 0 && completedOutputPath) {
         const chapterText = buildYouTubeChapters();
         if (chapterText) {
-          const txtPath = state.outputPath.replace(/\.[^.]+$/, '') + '.txt';
+          const txtPath = completedOutputPath.replace(/\.[^.]+$/, '') + '.txt';
           addLog(`📋 Saving chapter markers to: ${txtPath}`);
           const saved = await window.api.writeTextFile({ filePath: txtPath, content: chapterText });
           if (saved) {
@@ -1727,7 +1753,7 @@ function setupRenderListeners() {
           addLog('⚠ buildYouTubeChapters() returned empty — no .txt written.', 'err');
         }
       } else {
-        addLog(`⚠ Skipped .txt: chapters=${state.chapters.length}, outputPath=${state.outputPath}`, 'err');
+        addLog(`⚠ Skipped .txt: chapters=${state.chapters.length}, outputPath=${completedOutputPath}`, 'err');
       }
     } else {
       setProgress(0, '❌ Export failed');

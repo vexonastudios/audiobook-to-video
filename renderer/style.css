@@ -562,6 +562,31 @@ html, body {
 .export-btn:active:not(:disabled) { transform: translateY(0); }
 .export-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
+.open-output-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 11px 18px;
+  background: rgba(57, 184, 112, 0.14);
+  border: 1px solid rgba(73, 210, 132, 0.62);
+  border-radius: var(--radius-md);
+  color: #85e7ad;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+}
+.open-output-btn:hover {
+  background: rgba(57, 184, 112, 0.25);
+  border-color: #65d998;
+  color: #b5f3ce;
+  transform: translateY(-1px);
+}
+.open-output-btn:active { transform: translateY(0); }
+.open-output-btn:disabled { opacity: 0.5; cursor: wait; transform: none; }
+
 .stop-btn {
   display: flex;
   align-items: center;

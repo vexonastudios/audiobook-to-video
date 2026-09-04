@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('api', {
   pickSrtFile: () => ipcRenderer.invoke('pick-srt-file'),
   cancelRender: () => ipcRenderer.invoke('cancel-render'),
   writeTextFile: (opts) => ipcRenderer.invoke('write-text-file', opts),
+  openOutputFile: (filePath) => ipcRenderer.invoke('open-output-file', filePath),
 
   // Image utilities
   imageToDataURL: (filePath) => ipcRenderer.invoke('image-to-dataurl', filePath),

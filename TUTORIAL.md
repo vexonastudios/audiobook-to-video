@@ -32,4 +32,6 @@ Before rendering, leave **Print Edition Promotion** enabled if the book is also 
 
 Once your fields are filled and chapters are parsed, click **Render Video**. The optimized renderer stores one high-resolution still per chapter, creates additional artwork only for transitions, intros, or the short promotional card, and then builds a broadly compatible constant-30fps video. Compatible compressed audio is copied directly, while other audio is cached after its first conversion. You can track progress in the log box at the bottom.
 
+After a successful export, click **Open Video** beside the render button to watch the finished MP4 immediately in your default video player.
+
 If a particular media file has trouble with the optimized renderer, enable **Compatibility Mode** in the export section to use the former segmented process. This fallback is substantially slower.

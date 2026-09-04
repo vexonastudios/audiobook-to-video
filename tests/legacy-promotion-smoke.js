@@ -34,7 +34,7 @@ async function runTest() {
     const outputPath = path.join(root, 'legacy-promotion.mp4');
     run(ffmpegPath, [
       '-hide_banner', '-loglevel', 'error',
-      '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=44100:duration=6',
+      '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=44100:duration=18',
       '-c:a', 'libmp3lame', '-b:a', '128k', '-y', audioPath
     ]);
 
@@ -45,7 +45,7 @@ async function runTest() {
       bgDataURL: coverDataURL,
       wavPath: audioPath,
       outputPath,
-      chapters: [{ startTime: 0, endTime: 6, number: 1, title: 'Legacy Promotion Test', isNumbered: true }],
+      chapters: [{ startTime: 0, endTime: 18, number: 1, title: 'Legacy Promotion Test', isNumbered: true }],
       blurAmount: 20,
       bgOpacity: 0.65,
       accentColor: [211, 193, 166],
@@ -53,7 +53,16 @@ async function runTest() {
       codec: 'h264',
       fastAudioCopy: true,
       openingTitlesEnabled: true,
-      openingTitles: { title: 'Legacy Opening Test' },
+      openingTitles: {
+        presentationLabel: 'A SCROLL READER PRESENTATION',
+        title: 'Legacy Opening Test',
+        subtitle: 'Static Card Pipeline',
+        seriesName: 'Renderer Test Series',
+        bookNumber: '2',
+        author: 'Vexona Studios',
+        originallyPublished: '2026',
+        site: 'scrollreader.com'
+      },
       printPromoEnabled: true,
       printPromoStart: 1,
       printPromoDuration: 2
@@ -75,13 +84,13 @@ async function runTest() {
       '-v', 'error', '-show_entries', 'format=duration:stream=codec_type,time_base', '-of', 'json', outputPath
     ]));
     const duration = Number(metadata.format.duration);
-    if (Math.abs(duration - 6) > 0.1) throw new Error(`Legacy promotion output duration was ${duration}s`);
+    if (Math.abs(duration - 18) > 0.1) throw new Error(`Legacy promotion output duration was ${duration}s`);
     const video = metadata.streams.find(stream => stream.codec_type === 'video');
     if (!video || video.time_base !== '1/3000') {
       throw new Error(`Legacy output expected decoder-safe 1/3000 video time base, got ${video?.time_base || 'none'}`);
     }
-    if (openingFramesRendered !== 90) {
-      throw new Error(`Legacy opening titles expected 90 rendered frames, got ${openingFramesRendered}`);
+    if (openingFramesRendered !== 6) {
+      throw new Error(`Legacy opening titles expected 6 rendered stills for 5 cards, got ${openingFramesRendered}`);
     }
 
     const beforePath = path.join(root, 'before.png');

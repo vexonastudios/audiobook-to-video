@@ -31,6 +31,9 @@ const sequence = resolveOpeningTitleSequence(fields, 30, 30);
 if (!sequence || sequence.duration !== 15 || sequence.frameCount !== 450) {
   throw new Error(`Expected a 15-second/450-frame sequence, got ${JSON.stringify(sequence)}`);
 }
+if (sequence.cardDuration !== 3 || sequence.fadeDuration !== 0.65) {
+  throw new Error(`Unexpected card/fade timing: ${JSON.stringify(sequence)}`);
+}
 
 const opening = resolveOpeningTitleFrame(cards, 0, sequence.duration);
 if (opening.fromCard !== null || opening.toCard !== cards[0] || opening.mix !== 0) {

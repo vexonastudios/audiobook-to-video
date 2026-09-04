@@ -198,45 +198,69 @@ async function renderVideo(params, callbacks) {
     const firstChapterTransitionBudget = transitionStyle !== 'cut' && chapters.length > 1
       ? transitionDuration / 2
       : 0;
-    const openingSequence = openingTitlesEnabled
+    let openingSequence = openingTitlesEnabled
       ? resolveOpeningTitleSequence(
           openingTitles,
           Math.max(0, firstChapterDuration - firstChapterTransitionBudget - FRAME_DURATION),
           OUTPUT_FPS
         )
       : null;
+    const requiredOpeningLead = introClipPath && introStyle === 'overlap'
+      ? Math.min(overlapFade, Math.max(FRAME_DURATION, firstChapterDuration - FRAME_DURATION))
+      : 0;
+    if (openingSequence && openingSequence.duration + 1e-9 < requiredOpeningLead) {
+      onLog('⚠ Opening titles skipped because the first chapter is too short for the intro overlap.');
+      openingSequence = null;
+    }
 
-    const openingEntries = openingTitlesEnabled
+    const openingSegmentPath = openingTitlesEnabled
       ? await timed('Opening title rendering', async () => {
           if (!openingSequence) {
             onLog('⚠ Opening titles skipped because no completed cards fit inside the first chapter.');
-            return [];
+            return null;
           }
           if (!renderOpeningFrameToFile) throw new Error('Opening title renderer callback is unavailable.');
 
           const openingDir = path.join(tmpDir, 'opening_titles');
           fs.mkdirSync(openingDir, { recursive: true });
-          const entries = [];
-          onLog(`\n✨ Rendering ${openingSequence.cards.length} opening title card${openingSequence.cards.length === 1 ? '' : 's'} (${openingSequence.duration.toFixed(1)}s)...`);
+          const blankPath = path.join(openingDir, 'blank.png');
+          const cardPaths = [];
+          const stillCount = openingSequence.cards.length + 1;
+          onLog(`\n✨ Rendering ${openingSequence.cards.length} opening title card${openingSequence.cards.length === 1 ? '' : 's'} once (${openingSequence.duration.toFixed(1)}s sequence)...`);
 
-          for (let frame = 0; frame < openingSequence.frameCount; frame++) {
+          await renderOpeningFrameToFile({
+            chapter: chapters[0],
+            openingBlank: true
+          }, blankPath);
+          reportProgress(22 + (1 / stillCount) * 4, `Rendered opening title still 1 / ${stillCount}`);
+
+          for (let index = 0; index < openingSequence.cards.length; index++) {
             if (cancelled()) throw new Error('RENDER_CANCELLED');
-            const framePath = path.join(openingDir, `f_${String(frame).padStart(4, '0')}.png`);
+            const framePath = path.join(openingDir, `card_${String(index).padStart(2, '0')}.png`);
             await renderOpeningFrameToFile({
               chapter: chapters[0],
-              openingSequenceFrame: {
-                cards: openingSequence.cards,
-                time: frame / OUTPUT_FPS,
-                duration: openingSequence.duration
-              }
+              openingPreviewCard: openingSequence.cards[index]
             }, framePath);
-            entries.push({ path: framePath, duration: FRAME_DURATION, kind: 'opening' });
-            reportProgress(22 + ((frame + 1) / openingSequence.frameCount) * 6, `Rendered opening title frame ${frame + 1} / ${openingSequence.frameCount}`);
+            cardPaths.push(framePath);
+            reportProgress(22 + ((index + 2) / stillCount) * 4, `Rendered opening title still ${index + 2} / ${stillCount}`);
           }
 
-          return entries;
+          const segmentPath = path.join(openingDir, 'opening_titles.mp4');
+          reportProgress(27, 'Animating opening title cards with FFmpeg...');
+          await encodeOpeningTitleSequenceVideo({
+            blankPath,
+            cardPaths,
+            chapterPath: chapterFramePaths[0],
+            sequence: openingSequence,
+            outputPath: segmentPath,
+            useGPU,
+            codec,
+            crf,
+            isCancelled: cancelled
+          });
+          return segmentPath;
         })
-      : [];
+      : null;
 
     let timelineEntries = buildTimelineEntries({
       chapters,
@@ -246,15 +270,6 @@ async function renderVideo(params, callbacks) {
       transitionDuration,
       totalDuration
     });
-
-    if (openingEntries.length > 0) {
-      timelineEntries = replaceTimelineRange(
-        timelineEntries,
-        0,
-        openingSequence.duration,
-        openingEntries
-      );
-    }
 
     if (printPromoEnabled) {
       timelineEntries = await timed('Print promotion rendering', async () => {
@@ -308,7 +323,8 @@ async function renderVideo(params, callbacks) {
         const headPath = path.join(tmpDir, 'intro_overlap_head.mp4');
         await encodeOverlapHeadVideo({
           introClipPath,
-          firstStillPath: timelineEntries[0].path,
+          firstStillPath: openingSegmentPath ? null : timelineEntries[0].path,
+          bookVideoPath: openingSegmentPath,
           introDuration: introData.duration,
           fadeDuration: safeFade,
           outputPath: headPath,
@@ -318,22 +334,44 @@ async function renderVideo(params, callbacks) {
           isCancelled: cancelled
         });
 
-        const tailEntries = trimTimelineEntries(timelineEntries, safeFade);
-        const tailPath = path.join(tmpDir, 'visual_tail.mp4');
+        const timelineTrim = openingSegmentPath ? openingSequence.duration : safeFade;
+        const tailEntries = trimTimelineEntries(timelineEntries, timelineTrim);
+        const timelineTailPath = path.join(tmpDir, 'visual_timeline_tail.mp4');
         await encodeVisualTimeline({
           entries: tailEntries,
-          expectedDuration: totalDuration - safeFade,
+          expectedDuration: totalDuration - timelineTrim,
           manifestPath: path.join(tmpDir, 'visual_tail.ffconcat'),
-          outputPath: tailPath,
+          outputPath: timelineTailPath,
           useGPU,
           codec,
           crf,
           isCancelled: cancelled,
-          onProgress: seconds => reportProgress(35 + (seconds / Math.max(1, totalDuration - safeFade)) * 25, 'Encoding timestamped visual timeline...')
+          onProgress: seconds => reportProgress(35 + (seconds / Math.max(1, totalDuration - timelineTrim)) * 25, 'Encoding visual timeline...')
         });
 
         const combinedPath = path.join(tmpDir, 'visual_with_intro.mp4');
-        await concatMediaFiles([headPath, tailPath], combinedPath, cancelled);
+        const segments = [headPath];
+        if (openingSegmentPath && openingSequence.duration - safeFade > FRAME_DURATION) {
+          const openingTailPath = path.join(tmpDir, 'opening_titles_tail.mp4');
+          await encodeVideoRange({
+            inputPath: openingSegmentPath,
+            start: safeFade,
+            duration: openingSequence.duration - safeFade,
+            outputPath: openingTailPath,
+            useGPU,
+            codec,
+            crf,
+            isCancelled: cancelled
+          });
+          segments.push(openingTailPath);
+        }
+        segments.push(timelineTailPath);
+        await concatMediaFiles(
+          segments,
+          combinedPath,
+          cancelled,
+          introData.duration + totalDuration - safeFade
+        );
         return combinedPath;
       });
       finalDuration = introData.duration + totalDuration - safeFade;
@@ -342,17 +380,27 @@ async function renderVideo(params, callbacks) {
       visualVideoPath = await timed('Visual timeline encoding', async () => {
         reportProgress(33, 'Encoding visual timeline...');
         const resultPath = path.join(tmpDir, 'visual_main.mp4');
+        const timelineTrim = openingSegmentPath ? openingSequence.duration : 0;
+        const entriesToEncode = timelineTrim > 0
+          ? trimTimelineEntries(timelineEntries, timelineTrim)
+          : timelineEntries;
+        const timelinePath = openingSegmentPath
+          ? path.join(tmpDir, 'visual_after_opening.mp4')
+          : resultPath;
         await encodeVisualTimeline({
-          entries: timelineEntries,
-          expectedDuration: totalDuration,
+          entries: entriesToEncode,
+          expectedDuration: totalDuration - timelineTrim,
           manifestPath: path.join(tmpDir, 'visual_main.ffconcat'),
-          outputPath: resultPath,
+          outputPath: timelinePath,
           useGPU,
           codec,
           crf,
           isCancelled: cancelled,
-          onProgress: seconds => reportProgress(33 + (seconds / Math.max(1, totalDuration)) * 27, 'Encoding visual timeline...')
+          onProgress: seconds => reportProgress(33 + (seconds / Math.max(1, totalDuration - timelineTrim)) * 27, 'Encoding visual timeline...')
         });
+        if (openingSegmentPath) {
+          await concatMediaFiles([openingSegmentPath, timelinePath], resultPath, cancelled, totalDuration);
+        }
         return resultPath;
       });
     }
@@ -555,6 +603,91 @@ function sliceTimelineRange(entries, rangeStart, rangeEnd) {
     if (cursor >= rangeEnd - 1e-9) break;
   }
   return result;
+}
+
+async function encodeOpeningTitleSequenceVideo({
+  blankPath,
+  cardPaths,
+  chapterPath,
+  sequence,
+  outputPath,
+  useGPU,
+  codec,
+  crf,
+  isCancelled
+}) {
+  if (!sequence || cardPaths.length !== sequence.cards.length) {
+    throw new Error('Opening title card images do not match the resolved sequence.');
+  }
+
+  const { cardDuration, fadeDuration, duration } = sequence;
+  const imageInputs = [
+    { path: blankPath, duration: fadeDuration },
+    ...cardPaths.map((imagePath, index) => ({
+      path: imagePath,
+      duration: index === cardPaths.length - 1 ? cardDuration : cardDuration + fadeDuration
+    })),
+    { path: chapterPath, duration: fadeDuration }
+  ];
+  const inputArgs = imageInputs.flatMap(input => [
+    '-loop', '1', '-framerate', String(OUTPUT_FPS),
+    '-t', input.duration.toFixed(6), '-i', input.path
+  ]);
+  const filters = imageInputs.map((_, index) =>
+    `[${index}:v]fps=${OUTPUT_FPS},scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:flags=lanczos,` +
+    `format=yuv420p,settb=AVTB,setpts=PTS-STARTPTS[v${index}]`
+  );
+
+  let currentLabel = 'v0';
+  for (let index = 0; index < cardPaths.length; index++) {
+    const outputLabel = `opening_xfade_${index}`;
+    const offset = index === 0 ? 0 : index * cardDuration;
+    filters.push(
+      `[${currentLabel}][v${index + 1}]xfade=transition=fade:` +
+      `duration=${fadeDuration.toFixed(6)}:offset=${offset.toFixed(6)}[${outputLabel}]`
+    );
+    currentLabel = outputLabel;
+  }
+
+  const chapterInputIndex = imageInputs.length - 1;
+  filters.push(
+    `[${currentLabel}][v${chapterInputIndex}]xfade=transition=fade:` +
+    `duration=${fadeDuration.toFixed(6)}:offset=${(duration - fadeDuration).toFixed(6)}[opening_final]`
+  );
+  filters.push(
+    `[opening_final]trim=end_frame=${sequence.frameCount},setpts=PTS-STARTPTS[vout]`
+  );
+
+  await runFFmpeg([
+    ...inputArgs,
+    '-filter_complex', filters.join(';'),
+    '-map', '[vout]', '-frames:v', String(sequence.frameCount),
+    ...videoEncodeArgs({ useGPU, codec, crf }),
+    '-r', String(OUTPUT_FPS), '-fps_mode:v', 'cfr',
+    '-video_track_timescale', String(VIDEO_TRACK_TIMESCALE),
+    '-an', '-movflags', '+faststart', '-y', outputPath
+  ], isCancelled);
+}
+
+async function encodeVideoRange({
+  inputPath,
+  start,
+  duration,
+  outputPath,
+  useGPU,
+  codec,
+  crf,
+  isCancelled
+}) {
+  await runFFmpeg([
+    '-i', inputPath,
+    '-vf', `trim=start=${start.toFixed(6)}:duration=${duration.toFixed(6)},setpts=PTS-STARTPTS,fps=${OUTPUT_FPS},format=yuv420p`,
+    '-t', duration.toFixed(6),
+    ...videoEncodeArgs({ useGPU, codec, crf }),
+    '-r', String(OUTPUT_FPS), '-fps_mode:v', 'cfr',
+    '-video_track_timescale', String(VIDEO_TRACK_TIMESCALE),
+    '-an', '-movflags', '+faststart', '-y', outputPath
+  ], isCancelled);
 }
 
 async function encodeVisualTimeline({
@@ -870,6 +1003,7 @@ async function muxAudioVideo({
 async function encodeOverlapHeadVideo({
   introClipPath,
   firstStillPath,
+  bookVideoPath = null,
   introDuration,
   fadeDuration,
   outputPath,
@@ -879,6 +1013,9 @@ async function encodeOverlapHeadVideo({
   isCancelled
 }) {
   const offset = Math.max(0, introDuration - fadeDuration);
+  const bookInputArgs = bookVideoPath
+    ? ['-i', bookVideoPath]
+    : ['-loop', '1', '-framerate', String(OUTPUT_FPS), '-i', firstStillPath];
   const filter =
     `[0:v]scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease,` +
     `pad=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2,fps=${OUTPUT_FPS},` +
@@ -889,7 +1026,7 @@ async function encodeOverlapHeadVideo({
 
   await runFFmpeg([
     '-i', introClipPath,
-    '-loop', '1', '-framerate', String(OUTPUT_FPS), '-i', firstStillPath,
+    ...bookInputArgs,
     '-filter_complex', filter,
     '-map', '[vout]', '-t', introDuration.toFixed(6),
     ...videoEncodeArgs({ useGPU, codec, crf }),
@@ -965,7 +1102,7 @@ async function prependSequentialIntro({
   await concatMediaFiles([normalizedIntro, mainVideoPath], outputPath, isCancelled);
 }
 
-async function concatMediaFiles(inputPaths, outputPath, isCancelled) {
+async function concatMediaFiles(inputPaths, outputPath, isCancelled, expectedDuration = null) {
   const listPath = `${outputPath}.ffconcat`;
   fs.writeFileSync(listPath, [
     'ffconcat version 1.0',
@@ -975,6 +1112,7 @@ async function concatMediaFiles(inputPaths, outputPath, isCancelled) {
   try {
     await runFFmpeg([
       '-f', 'concat', '-safe', '0', '-i', listPath,
+      ...(Number.isFinite(expectedDuration) ? ['-t', expectedDuration.toFixed(6)] : []),
       '-c', 'copy', '-video_track_timescale', String(VIDEO_TRACK_TIMESCALE),
       '-movflags', '+faststart', '-y', outputPath
     ], isCancelled);

@@ -66,10 +66,14 @@ function resolveOpeningTitleSequence(fields, maxDuration = Infinity, fps = 30) {
   if (duration < cards.length * OPENING_TITLE_MIN_SECONDS_PER_CARD) return null;
 
   const frameCount = Math.max(2, Math.floor(duration * fps + 1e-6));
+  const snappedDuration = frameCount / fps;
+  const cardDuration = snappedDuration / cards.length;
   return {
     cards,
     frameCount,
-    duration: frameCount / fps,
+    duration: snappedDuration,
+    cardDuration,
+    fadeDuration: Math.min(OPENING_TITLE_FADE_SECONDS, cardDuration * 0.28),
     fps
   };
 }

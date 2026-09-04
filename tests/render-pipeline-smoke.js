@@ -25,7 +25,8 @@ function probe(filePath) {
 async function runScenario({
   name, root, stillPath, wavPath, introPath, introStyle, expectedDuration,
   transitionStyle, codec = 'h264', expectedAudioCodec = 'aac',
-  openingTitlesEnabled = false
+  openingTitlesEnabled = false, openingTitles = null,
+  chapterSplit = 3, expectedOpeningStills = 2
 }) {
   const outputPath = path.join(root, `${name}.mp4`);
   let openingFramesRendered = 0;
@@ -34,8 +35,8 @@ async function runScenario({
     wavPath,
     outputPath,
     chapters: [
-      { startTime: 0, endTime: 3, number: 1, title: 'One', isNumbered: true },
-      { startTime: 3, endTime: 6, number: 2, title: 'Two', isNumbered: true }
+      { startTime: 0, endTime: chapterSplit, number: 1, title: 'One', isNumbered: true },
+      { startTime: chapterSplit, endTime: 6, number: 2, title: 'Two', isNumbered: true }
     ],
     blurAmount: 10,
     bgOpacity: 0.6,
@@ -48,7 +49,7 @@ async function runScenario({
     introFadeDuration: 1,
     codec,
     openingTitlesEnabled,
-    openingTitles: openingTitlesEnabled ? { title: 'Smoke Test Book' } : {},
+    openingTitles: openingTitlesEnabled ? (openingTitles || { title: 'Smoke Test Book' }) : {},
     fastAudioCopy: true,
     audioCacheDir: path.join(root, 'audio-cache')
   }, {
@@ -93,8 +94,8 @@ async function runScenario({
   if (Math.abs(frameCount - expectedFrames) > 2) {
     throw new Error(`${name}: expected about ${expectedFrames} actual frames, got ${frameCount}`);
   }
-  if (openingTitlesEnabled && openingFramesRendered === 0) {
-    throw new Error(`${name}: opening titles were enabled but no opening frames were rendered`);
+  if (openingTitlesEnabled && openingFramesRendered !== expectedOpeningStills) {
+    throw new Error(`${name}: expected ${expectedOpeningStills} opening stills, got ${openingFramesRendered}`);
   }
   run(ffmpegPath, ['-hide_banner', '-loglevel', 'error', '-i', outputPath, '-f', 'null', nullOutput]);
   run(ffmpegPath, [
@@ -146,7 +147,8 @@ async function main() {
     }));
     results.push(await runScenario({
       name: 'overlap-intro', root, stillPath, wavPath, introPath,
-      introStyle: 'overlap', expectedDuration: 7, transitionStyle: 'cut'
+      introStyle: 'overlap', expectedDuration: 7, transitionStyle: 'cut',
+      openingTitlesEnabled: true
     }));
     results.push(await runScenario({
       name: 'h265', root, stillPath, wavPath, introPath,
@@ -156,6 +158,20 @@ async function main() {
       name: 'mp3-copy', root, stillPath, wavPath: mp3Path, introPath,
       introStyle: null, expectedDuration: 6, transitionStyle: 'cut', expectedAudioCodec: 'mp3',
       openingTitlesEnabled: true
+    }));
+    results.push(await runScenario({
+      name: 'multi-card-opening', root, stillPath, wavPath, introPath,
+      introStyle: null, expectedDuration: 6, transitionStyle: 'cut',
+      openingTitlesEnabled: true,
+      openingTitles: {
+        title: 'Smoke Test Book',
+        seriesName: 'Test Series',
+        bookNumber: '2',
+        author: 'Test Author',
+        site: ''
+      },
+      chapterSplit: 4.8,
+      expectedOpeningStills: 4
     }));
 
     let cancellationObserved = false;

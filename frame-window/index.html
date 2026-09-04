@@ -348,6 +348,8 @@
   }
 
   function drawOpeningSequenceText(ctx, params) {
+    if (params.openingBlank) return;
+
     if (params.openingPreviewCard) {
       drawOpeningTitleCard(ctx, params.openingPreviewCard, params, 1, 0);
       return;
@@ -457,7 +459,7 @@
     ctx.restore();
 
     // ── 3. Right-side content ───────────────────────────────────
-    if (params.openingPreviewCard || params.openingSequenceFrame) {
+    if (params.openingBlank || params.openingPreviewCard || params.openingSequenceFrame) {
       drawOpeningSequenceText(ctx, params);
     } else {
       drawChapterText(ctx, params);

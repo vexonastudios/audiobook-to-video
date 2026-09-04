@@ -15,6 +15,7 @@ async function run() {
   const chapterTwoPath = path.join(outputDir, 'chapter-two.png');
   const promotionPath = path.join(outputDir, 'print-promotion.png');
   const promotionOverlayPath = path.join(outputDir, 'print-promotion-overlay.png');
+  const openingBlankPath = path.join(outputDir, 'opening-blank.png');
   const openingTitlePath = path.join(outputDir, 'opening-title.png');
   const openingSeriesPath = path.join(outputDir, 'opening-series.png');
   const openingAuthorPath = path.join(outputDir, 'opening-author.png');
@@ -69,6 +70,12 @@ async function run() {
       { type: 'published', label: 'ORIGINALLY PUBLISHED', primary: '1910', secondary: '' },
       { type: 'site', label: 'DISCOVER MORE AT', primary: 'scrollreader.com', secondary: '' }
     ];
+    await window.webContents.executeJavaScript(
+      `window.renderOpeningFrameToFile(${JSON.stringify({
+        chapter: { number: null, title: 'Introduction', isNumbered: false },
+        openingBlank: true
+      })}, ${JSON.stringify(openingBlankPath)})`
+    );
     for (const [targetPath, time] of [[openingTitlePath, 1], [openingSeriesPath, 4], [openingAuthorPath, 7]]) {
       await window.webContents.executeJavaScript(
         `window.renderOpeningFrameToFile(${JSON.stringify({
@@ -100,6 +107,7 @@ async function run() {
     for (const outputPath of [
       chapterOnePath,
       chapterTwoPath,
+      openingBlankPath,
       openingTitlePath,
       openingSeriesPath,
       openingAuthorPath,
@@ -127,6 +135,9 @@ async function run() {
     }
     if (fs.readFileSync(openingTitlePath).equals(fs.readFileSync(chapterOnePath))) {
       throw new Error('Opening title card did not differ from a chapter frame.');
+    }
+    if (fs.readFileSync(openingBlankPath).equals(fs.readFileSync(chapterOnePath))) {
+      throw new Error('Blank opening frame unexpectedly contained chapter text.');
     }
     const overlayMetadata = await sharp(promotionOverlayPath).metadata();
     if (!overlayMetadata.hasAlpha) throw new Error('Print promotion overlay did not preserve transparency.');

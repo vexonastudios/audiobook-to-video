@@ -219,42 +219,54 @@ async function renderVideo(params, callbacks) {
         if (!renderOpeningFrameToFile) throw new Error('Opening title renderer callback is unavailable.');
         const openingDir = path.join(tmpDir, 'opening_titles');
         fs.mkdirSync(openingDir, { recursive: true });
-        onLog(`\n✨ Rendering ${openingSequence.cards.length} opening title card${openingSequence.cards.length === 1 ? '' : 's'} (${openingSequence.duration.toFixed(1)}s)...`);
+        const blankPath = path.join(openingDir, 'blank.png');
+        const cardPaths = [];
+        const stillCount = openingSequence.cards.length + 1;
+        onLog(`\n✨ Rendering ${openingSequence.cards.length} opening title card${openingSequence.cards.length === 1 ? '' : 's'} once (${openingSequence.duration.toFixed(1)}s sequence)...`);
 
-        for (let frame = 0; frame < openingSequence.frameCount; frame++) {
+        const baseOpeningParams = {
+          coverDataURL,
+          bgDataURL: bgDataURL || coverDataURL,
+          blurAmount,
+          bgOpacity,
+          bgOffsetY,
+          chapter: chapters[0],
+          accentColor,
+          logoDataURL,
+          coverBorderWidth,
+          titleFontSize
+        };
+        await renderOpeningFrameToFile({ ...baseOpeningParams, openingBlank: true }, blankPath);
+        onProgress({
+          phase: 'frames',
+          current: 1,
+          total: stillCount,
+          percent: 32
+        });
+
+        for (let index = 0; index < openingSequence.cards.length; index++) {
           if (isCancelled()) throw new Error('RENDER_CANCELLED');
-          const framePath = path.join(openingDir, `f_${String(frame).padStart(4, '0')}.png`);
+          const framePath = path.join(openingDir, `card_${String(index).padStart(2, '0')}.png`);
           await renderOpeningFrameToFile({
-            coverDataURL,
-            bgDataURL: bgDataURL || coverDataURL,
-            blurAmount,
-            bgOpacity,
-            bgOffsetY,
-            chapter: chapters[0],
-            accentColor,
-            logoDataURL,
-            coverBorderWidth,
-            titleFontSize,
-            openingSequenceFrame: {
-              cards: openingSequence.cards,
-              time: frame / OUTPUT_FPS,
-              duration: openingSequence.duration
-            }
+            ...baseOpeningParams,
+            openingPreviewCard: openingSequence.cards[index]
           }, framePath);
+          cardPaths.push(framePath);
           onProgress({
             phase: 'frames',
-            current: frame + 1,
-            total: openingSequence.frameCount,
-            percent: 30 + Math.round(((frame + 1) / openingSequence.frameCount) * 10)
+            current: index + 2,
+            total: stillCount,
+            percent: 30 + Math.round(((index + 2) / stillCount) * 10)
           });
         }
 
         openingSegmentPath = path.join(tmpDir, 'opening_titles.mp4');
-        await encodeFrameSequence({
-          frameDir: openingDir,
+        await encodeOpeningTitleSequenceVideo({
+          blankPath,
+          cardPaths,
+          chapterPath: chapterFramePaths[0],
+          sequence: openingSequence,
           outputPath: openingSegmentPath,
-          fps: OUTPUT_FPS,
-          duration: openingSequence.duration,
           crf,
           useGPU,
           codec,
@@ -748,6 +760,80 @@ function encodeFrameSequence({ frameDir, outputPath, fps, duration, crf, useGPU,
     '-crf', String(crf),
     '-pix_fmt', 'yuv420p',
     '-r', String(fps),
+    '-video_track_timescale', String(VIDEO_TRACK_TIMESCALE),
+    '-an', '-y', outputPath
+  ], isCancelled);
+}
+
+function encodeOpeningTitleSequenceVideo({
+  blankPath,
+  cardPaths,
+  chapterPath,
+  sequence,
+  outputPath,
+  crf,
+  useGPU,
+  codec = 'h264',
+  isCancelled
+}) {
+  if (!sequence || cardPaths.length !== sequence.cards.length) {
+    throw new Error('Opening title card images do not match the resolved sequence.');
+  }
+
+  const { cardDuration, fadeDuration, duration } = sequence;
+  const imageInputs = [
+    { path: blankPath, duration: fadeDuration },
+    ...cardPaths.map((imagePath, index) => ({
+      path: imagePath,
+      duration: index === cardPaths.length - 1 ? cardDuration : cardDuration + fadeDuration
+    })),
+    { path: chapterPath, duration: fadeDuration }
+  ];
+  const inputArgs = imageInputs.flatMap(input => [
+    '-loop', '1', '-framerate', String(OUTPUT_FPS),
+    '-t', input.duration.toFixed(6), '-i', input.path
+  ]);
+  const filters = imageInputs.map((_, index) =>
+    `[${index}:v]fps=${OUTPUT_FPS},scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:flags=lanczos,` +
+    `format=yuv420p,settb=AVTB,setpts=PTS-STARTPTS[v${index}]`
+  );
+
+  let currentLabel = 'v0';
+  for (let index = 0; index < cardPaths.length; index++) {
+    const outputLabel = `opening_xfade_${index}`;
+    const offset = index === 0 ? 0 : index * cardDuration;
+    filters.push(
+      `[${currentLabel}][v${index + 1}]xfade=transition=fade:` +
+      `duration=${fadeDuration.toFixed(6)}:offset=${offset.toFixed(6)}[${outputLabel}]`
+    );
+    currentLabel = outputLabel;
+  }
+
+  const chapterInputIndex = imageInputs.length - 1;
+  filters.push(
+    `[${currentLabel}][v${chapterInputIndex}]xfade=transition=fade:` +
+    `duration=${fadeDuration.toFixed(6)}:offset=${(duration - fadeDuration).toFixed(6)}[opening_final]`
+  );
+  filters.push(
+    `[opening_final]trim=end_frame=${sequence.frameCount},setpts=PTS-STARTPTS[vout]`
+  );
+
+  const videoArgs = useGPU
+    ? [
+        '-c:v', codec === 'h265' ? 'hevc_nvenc' : 'h264_nvenc',
+        '-preset', 'p4', '-tune', 'hq', '-rc', 'vbr', '-cq', String(crf)
+      ]
+    : [
+        '-c:v', codec === 'h265' ? 'libx265' : 'libx264',
+        '-preset', 'ultrafast', '-crf', String(crf)
+      ];
+
+  return runFFmpeg([
+    ...inputArgs,
+    '-filter_complex', filters.join(';'),
+    '-map', '[vout]', '-frames:v', String(sequence.frameCount),
+    ...videoArgs,
+    '-pix_fmt', 'yuv420p', '-r', String(OUTPUT_FPS), '-fps_mode:v', 'cfr',
     '-video_track_timescale', String(VIDEO_TRACK_TIMESCALE),
     '-an', '-y', outputPath
   ], isCancelled);

@@ -17,6 +17,9 @@ const TRANSITION_FPS = 30; // match chapter FPS — halves render cost, fixes co
 const OUTPUT_WIDTH = 1920;
 const OUTPUT_HEIGHT = 1080;
 const OUTPUT_SIZE = `${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`;
+// Exact for 30fps, while keeping MP4 video-track counters decoder-safe for
+// audiobooks up to nearly 199 hours (90000 crosses signed 32-bit at 6:37:41).
+const VIDEO_TRACK_TIMESCALE = 3000;
 
 // ── GPU Detection (run once at startup) ─────────────────────────────────────
 // We test NVENC once before touching real data, so we never waste time on
@@ -265,6 +268,7 @@ async function renderVideo(params, callbacks) {
       '-f', 'concat', '-safe', '0',
       '-i', concatListPath,
       '-c', 'copy',
+      '-video_track_timescale', String(VIDEO_TRACK_TIMESCALE),
       '-y', mergedVideoPath
     ]);
 
@@ -327,6 +331,7 @@ async function renderVideo(params, callbacks) {
         '-c:v', 'copy',
         ...audioCodecArgs,
         '-shortest',
+        '-video_track_timescale', String(VIDEO_TRACK_TIMESCALE),
         '-movflags', '+faststart',
         '-y', muxedTempPath
       ],
@@ -433,7 +438,7 @@ async function renderVideo(params, callbacks) {
             ...filterArgs,
             ...encodeArgs,
             '-ar', '44100',
-            '-video_track_timescale', '90000',
+            '-video_track_timescale', String(VIDEO_TRACK_TIMESCALE),
             '-y', outputPath
           ],
           totalDuration: totalOverlapDuration,
@@ -497,7 +502,7 @@ async function renderVideo(params, callbacks) {
           ...encodeArgs,
           ...introAudioCodecArgs,
           '-r', String(OUTPUT_FPS),
-          '-video_track_timescale', '90000',
+          '-video_track_timescale', String(VIDEO_TRACK_TIMESCALE),
           '-y', normalizedIntro
         ], isCancelled);
 
@@ -511,6 +516,7 @@ async function renderVideo(params, callbacks) {
           '-f', 'concat', '-safe', '0',
           '-i', introConcatListPath,
           '-c', 'copy',
+          '-video_track_timescale', String(VIDEO_TRACK_TIMESCALE),
           '-y', outputPath
         ], isCancelled);
       }
@@ -618,7 +624,7 @@ function encodeSegment({ imagePath, outputPath, duration, fps, crf, useGPU, code
       '-cq', String(crf),
       '-pix_fmt', 'yuv420p',
       '-r', String(fps),
-      '-video_track_timescale', '90000',
+      '-video_track_timescale', String(VIDEO_TRACK_TIMESCALE),
       '-an', '-y', outputPath
     ], isCancelled);
   }
@@ -634,7 +640,7 @@ function encodeSegment({ imagePath, outputPath, duration, fps, crf, useGPU, code
     '-crf', String(crf),
     '-pix_fmt', 'yuv420p',
     '-r', String(fps),
-    '-video_track_timescale', '90000',
+    '-video_track_timescale', String(VIDEO_TRACK_TIMESCALE),
     '-an', '-y', outputPath
   ], isCancelled);
 }
@@ -658,7 +664,7 @@ function encodeFrameSequence({ frameDir, outputPath, fps, duration, crf, useGPU,
       '-cq', String(crf),
       '-pix_fmt', 'yuv420p',
       '-r', String(fps),
-      '-video_track_timescale', '90000',
+      '-video_track_timescale', String(VIDEO_TRACK_TIMESCALE),
       '-an', '-y', outputPath
     ], isCancelled);
   }
@@ -673,7 +679,7 @@ function encodeFrameSequence({ frameDir, outputPath, fps, duration, crf, useGPU,
     '-crf', String(crf),
     '-pix_fmt', 'yuv420p',
     '-r', String(fps),
-    '-video_track_timescale', '90000',
+    '-video_track_timescale', String(VIDEO_TRACK_TIMESCALE),
     '-an', '-y', outputPath
   ], isCancelled);
 }
@@ -724,7 +730,7 @@ function encodeLegacyPrintPromotion({
     '-map', '[vout]', '-t', totalDuration.toFixed(6),
     ...videoArgs,
     '-pix_fmt', 'yuv420p', '-r', String(OUTPUT_FPS),
-    '-video_track_timescale', '90000', '-an', '-y', outputPath
+    '-video_track_timescale', String(VIDEO_TRACK_TIMESCALE), '-an', '-y', outputPath
   ], isCancelled);
 }
 

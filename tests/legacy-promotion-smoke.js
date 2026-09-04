@@ -64,10 +64,15 @@ async function runTest() {
       isCancelled: () => false
     });
 
-    const duration = Number(run(ffprobePath, [
-      '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', outputPath
-    ]).trim());
+    const metadata = JSON.parse(run(ffprobePath, [
+      '-v', 'error', '-show_entries', 'format=duration:stream=codec_type,time_base', '-of', 'json', outputPath
+    ]));
+    const duration = Number(metadata.format.duration);
     if (Math.abs(duration - 6) > 0.1) throw new Error(`Legacy promotion output duration was ${duration}s`);
+    const video = metadata.streams.find(stream => stream.codec_type === 'video');
+    if (!video || video.time_base !== '1/3000') {
+      throw new Error(`Legacy output expected decoder-safe 1/3000 video time base, got ${video?.time_base || 'none'}`);
+    }
 
     const beforePath = path.join(root, 'before.png');
     const duringPath = path.join(root, 'during.png');

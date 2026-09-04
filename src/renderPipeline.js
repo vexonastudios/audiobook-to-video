@@ -18,6 +18,10 @@ const OUTPUT_WIDTH = 1920;
 const OUTPUT_HEIGHT = 1080;
 const OUTPUT_SIZE = `${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`;
 const FRAME_DURATION = 1 / OUTPUT_FPS;
+// 3000 is exactly divisible by 30fps and keeps signed 32-bit track durations
+// safe for nearly 199 hours. A 90000 timescale overflows that boundary at
+// 6:37:41 and can produce a green video surface in Windows Media Player.
+const VIDEO_TRACK_TIMESCALE = 3000;
 // Sparse samples separated by many minutes are legal VFR, but several players
 // display the nearest sample instead of holding the preceding one. Reusing the
 // same rendered PNG once per second keeps seeking deterministic while retaining
@@ -517,7 +521,7 @@ async function encodeVisualTimeline({
       '-t', expectedDuration.toFixed(6),
       ...videoEncodeArgs({ useGPU, codec, crf, stillTimeline: true }),
       '-fps_mode:v', 'vfr',
-      '-video_track_timescale', '90000',
+      '-video_track_timescale', String(VIDEO_TRACK_TIMESCALE),
       '-an', '-movflags', '+faststart', '-y', outputPath
     ],
     totalDuration: expectedDuration,
@@ -797,6 +801,7 @@ async function muxAudioVideo({
       '-i', videoPath, '-i', audioPath,
       '-map', '0:v:0', '-map', '1:a:0',
       '-c', 'copy', '-t', expectedDuration.toFixed(6),
+      '-video_track_timescale', String(VIDEO_TRACK_TIMESCALE),
       '-movflags', '+faststart', '-y', outputPath
     ],
     totalDuration: expectedDuration,
@@ -831,7 +836,7 @@ async function encodeOverlapHeadVideo({
     '-filter_complex', filter,
     '-map', '[vout]', '-t', introDuration.toFixed(6),
     ...videoEncodeArgs({ useGPU, codec, crf }),
-    '-r', String(OUTPUT_FPS), '-video_track_timescale', '90000',
+    '-r', String(OUTPUT_FPS), '-video_track_timescale', String(VIDEO_TRACK_TIMESCALE),
     '-an', '-movflags', '+faststart', '-y', outputPath
   ], isCancelled);
 }
@@ -883,7 +888,7 @@ async function prependSequentialIntro({
         ...mapArgs,
         '-t', introData.duration.toFixed(6),
         ...videoEncodeArgs({ useGPU, codec, crf }),
-        '-r', String(OUTPUT_FPS), '-video_track_timescale', '90000',
+        '-r', String(OUTPUT_FPS), '-video_track_timescale', String(VIDEO_TRACK_TIMESCALE),
         '-c:a', audioEncoder, '-b:a', '192k', '-ar', String(sampleRate), '-ac', String(channels),
         '-movflags', '+faststart', '-y', partialPath
       ], isCancelled);
@@ -913,7 +918,8 @@ async function concatMediaFiles(inputPaths, outputPath, isCancelled) {
   try {
     await runFFmpeg([
       '-f', 'concat', '-safe', '0', '-i', listPath,
-      '-c', 'copy', '-movflags', '+faststart', '-y', outputPath
+      '-c', 'copy', '-video_track_timescale', String(VIDEO_TRACK_TIMESCALE),
+      '-movflags', '+faststart', '-y', outputPath
     ], isCancelled);
   } finally {
     try { fs.unlinkSync(listPath); } catch (_) {}

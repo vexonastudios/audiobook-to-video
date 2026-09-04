@@ -17,7 +17,7 @@ function run(command, args) {
 function probe(filePath) {
   return JSON.parse(run(ffprobePath, [
     '-v', 'error', '-count_frames',
-    '-show_entries', 'format=duration:stream=codec_type,codec_name,width,height,nb_read_frames',
+    '-show_entries', 'format=duration:stream=codec_type,codec_name,width,height,nb_read_frames,time_base,duration_ts',
     '-of', 'json', filePath
   ]));
 }
@@ -63,6 +63,9 @@ async function runScenario({
   const audio = metadata.streams.find(stream => stream.codec_type === 'audio');
   if (!video || !audio) throw new Error(`${name}: expected both video and audio streams`);
   if (video.width !== 1920 || video.height !== 1080) throw new Error(`${name}: expected a 1920x1080 video`);
+  if (video.time_base !== '1/3000') {
+    throw new Error(`${name}: expected decoder-safe 1/3000 video time base, got ${video.time_base}`);
+  }
   const expectedVideoCodec = codec === 'h265' ? 'hevc' : 'h264';
   if (video.codec_name !== expectedVideoCodec) {
     throw new Error(`${name}: expected ${expectedVideoCodec} video, got ${video.codec_name}`);

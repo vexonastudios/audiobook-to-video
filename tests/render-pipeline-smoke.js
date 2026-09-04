@@ -24,9 +24,11 @@ function probe(filePath) {
 
 async function runScenario({
   name, root, stillPath, wavPath, introPath, introStyle, expectedDuration,
-  transitionStyle, codec = 'h264', expectedAudioCodec = 'aac'
+  transitionStyle, codec = 'h264', expectedAudioCodec = 'aac',
+  openingTitlesEnabled = false
 }) {
   const outputPath = path.join(root, `${name}.mp4`);
+  let openingFramesRendered = 0;
   await renderVideo({
     coverDataURL: 'smoke-test-fixture',
     wavPath,
@@ -45,6 +47,8 @@ async function runScenario({
     introStyle: introStyle || 'push',
     introFadeDuration: 1,
     codec,
+    openingTitlesEnabled,
+    openingTitles: openingTitlesEnabled ? { title: 'Smoke Test Book' } : {},
     fastAudioCopy: true,
     audioCacheDir: path.join(root, 'audio-cache')
   }, {
@@ -52,6 +56,11 @@ async function runScenario({
     onLog: () => {},
     prepareFrameRenderer: async () => true,
     renderFrameToFile: async (_, targetPath) => fs.copyFileSync(stillPath, targetPath),
+    renderOpeningFrameToFile: async (_, targetPath) => {
+      openingFramesRendered++;
+      try { fs.linkSync(stillPath, targetPath); }
+      catch (_) { fs.copyFileSync(stillPath, targetPath); }
+    },
     renderTransitionFrameToFile: async (_, targetPath) => fs.copyFileSync(stillPath, targetPath),
     renderPromotionFrameToFile: async (_, targetPath) => fs.copyFileSync(stillPath, targetPath),
     isCancelled: () => false
@@ -84,12 +93,15 @@ async function runScenario({
   if (Math.abs(frameCount - expectedFrames) > 2) {
     throw new Error(`${name}: expected about ${expectedFrames} actual frames, got ${frameCount}`);
   }
+  if (openingTitlesEnabled && openingFramesRendered === 0) {
+    throw new Error(`${name}: opening titles were enabled but no opening frames were rendered`);
+  }
   run(ffmpegPath, ['-hide_banner', '-loglevel', 'error', '-i', outputPath, '-f', 'null', nullOutput]);
   run(ffmpegPath, [
     '-hide_banner', '-loglevel', 'error', '-ss', String(expectedDuration * 0.75),
     '-i', outputPath, '-frames:v', '1', '-f', 'null', nullOutput
   ]);
-  return { name, duration, frames: frameCount };
+  return { name, duration, frames: frameCount, openingFramesRendered };
 }
 
 async function main() {
@@ -142,7 +154,8 @@ async function main() {
     }));
     results.push(await runScenario({
       name: 'mp3-copy', root, stillPath, wavPath: mp3Path, introPath,
-      introStyle: null, expectedDuration: 6, transitionStyle: 'cut', expectedAudioCodec: 'mp3'
+      introStyle: null, expectedDuration: 6, transitionStyle: 'cut', expectedAudioCodec: 'mp3',
+      openingTitlesEnabled: true
     }));
 
     let cancellationObserved = false;

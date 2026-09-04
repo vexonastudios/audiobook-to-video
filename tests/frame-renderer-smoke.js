@@ -15,6 +15,8 @@ async function run() {
   const chapterTwoPath = path.join(outputDir, 'chapter-two.png');
   const promotionPath = path.join(outputDir, 'print-promotion.png');
   const promotionOverlayPath = path.join(outputDir, 'print-promotion-overlay.png');
+  const openingTitlePath = path.join(outputDir, 'opening-title.png');
+  const openingAuthorPath = path.join(outputDir, 'opening-author.png');
   const transitionPaths = ['fade', 'dissolve', 'flare', 'zoom'].map(style => ({
     style,
     path: path.join(outputDir, `transition-${style}.png`)
@@ -59,6 +61,20 @@ async function run() {
         chapter: { number: 2, title: 'Timestamped Timeline', isNumbered: true }
       })}, ${JSON.stringify(chapterTwoPath)})`
     );
+    const openingCards = [
+      { type: 'title', label: 'AUDIOBOOK PRESENTATION', primary: 'A Remarkable Story', secondary: 'The Complete Account' },
+      { type: 'author', label: 'WRITTEN BY', primary: 'Helen S. Dyer', secondary: '' },
+      { type: 'published', label: 'ORIGINALLY PUBLISHED', primary: '1910', secondary: '' },
+      { type: 'site', label: 'DISCOVER MORE AT', primary: 'scrollreader.com', secondary: '' }
+    ];
+    for (const [targetPath, time] of [[openingTitlePath, 1], [openingAuthorPath, 4]]) {
+      await window.webContents.executeJavaScript(
+        `window.renderOpeningFrameToFile(${JSON.stringify({
+          chapter: { number: null, title: 'Introduction', isNumbered: false },
+          openingSequenceFrame: { cards: openingCards, time, duration: 12 }
+        })}, ${JSON.stringify(targetPath)})`
+      );
+    }
     for (const transition of transitionPaths) {
       await window.webContents.executeJavaScript(
         `window.renderTransitionFrameToFile(${JSON.stringify({
@@ -82,6 +98,8 @@ async function run() {
     for (const outputPath of [
       chapterOnePath,
       chapterTwoPath,
+      openingTitlePath,
+      openingAuthorPath,
       promotionPath,
       promotionOverlayPath,
       ...transitionPaths.map(item => item.path)
@@ -97,6 +115,12 @@ async function run() {
     }
     if (fs.readFileSync(chapterOnePath).equals(fs.readFileSync(promotionPath))) {
       throw new Error('Print promotion frame did not differ from its base chapter frame.');
+    }
+    if (fs.readFileSync(openingTitlePath).equals(fs.readFileSync(openingAuthorPath))) {
+      throw new Error('Distinct opening title cards produced identical PNG files.');
+    }
+    if (fs.readFileSync(openingTitlePath).equals(fs.readFileSync(chapterOnePath))) {
+      throw new Error('Opening title card did not differ from a chapter frame.');
     }
     const overlayMetadata = await sharp(promotionOverlayPath).metadata();
     if (!overlayMetadata.hasAlpha) throw new Error('Print promotion overlay did not preserve transparency.');

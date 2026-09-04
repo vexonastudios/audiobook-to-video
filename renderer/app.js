@@ -56,6 +56,16 @@ const state = {
   codec: 'h264',             // 'h264' | 'h265'
   fastAudioCopy: true,
   printPromoEnabled: true,
+  openingTitlesEnabled: false,
+  openingTitles: {
+    title: '',
+    subtitle: '',
+    author: '',
+    originallyPublished: '',
+    site: 'scrollreader.com'
+  },
+  previewMode: 'chapter',
+  openingPreviewCardIndex: 0,
   compatibilityMode: false,  // use the legacy segmented renderer
   gpuStatus: 'unknown',       // 'unknown' | 'gpu' | 'cpu'
   gpuName: 'GPU'              // actual GPU name detected at runtime
@@ -116,6 +126,15 @@ const els = {
   introFadeSlider: $('intro-fade-slider'),
   introFadeVal: $('intro-fade-val'),
   printPromoToggle: $('print-promo-toggle'),
+
+  // Opening title sequence
+  openingTitlesToggle: $('opening-titles-toggle'),
+  openingTitlesSettings: $('opening-titles-settings'),
+  openingTitleInput: $('opening-title-input'),
+  openingSubtitleInput: $('opening-subtitle-input'),
+  openingAuthorInput: $('opening-author-input'),
+  openingPublishedInput: $('opening-published-input'),
+  openingSiteInput: $('opening-site-input'),
 
   // Sliders
   blurSlider: $('blur-slider'),
@@ -253,6 +272,16 @@ els.btnNewProject.addEventListener('click', () => {
       isRendering: false,
       fastAudioCopy: true,
       printPromoEnabled: true,
+      openingTitlesEnabled: false,
+      openingTitles: {
+        title: '',
+        subtitle: '',
+        author: '',
+        originallyPublished: '',
+        site: 'scrollreader.com'
+      },
+      previewMode: 'chapter',
+      openingPreviewCardIndex: 0,
       compatibilityMode: false
     });
     // Reset transition UI
@@ -299,6 +328,13 @@ els.btnNewProject.addEventListener('click', () => {
     els.introFadeVal.textContent = '1.0s';
     els.fastAudioToggle.checked = true;
     els.printPromoToggle.checked = true;
+    els.openingTitlesToggle.checked = false;
+    els.openingTitlesSettings.style.display = 'none';
+    els.openingTitleInput.value = '';
+    els.openingSubtitleInput.value = '';
+    els.openingAuthorInput.value = '';
+    els.openingPublishedInput.value = '';
+    els.openingSiteInput.value = 'scrollreader.com';
     els.compatibilityToggle.checked = false;
 
     els.blurSlider.value = 40;
@@ -341,7 +377,9 @@ els.btnSaveProject.addEventListener('click', async () => {
     selectedChapterIndex: state.selectedChapterIndex,
     transitionStyle: state.transitionStyle,
     transitionDuration: state.transitionDuration,
-    printPromoEnabled: state.printPromoEnabled
+    printPromoEnabled: state.printPromoEnabled,
+    openingTitlesEnabled: state.openingTitlesEnabled,
+    openingTitles: { ...state.openingTitles }
   };
   const success = await window.api.saveProjectFile(JSON.stringify(data, null, 2));
   if (success) addLog('✅ Project saved successfully.', 'ok');
@@ -642,6 +680,84 @@ els.btnOutput.addEventListener('click', async () => {
   saveSession();
   checkExportReady();
 });
+
+// ─────────────────────────────────────────────────────────────
+// Opening Title Sequence
+// ─────────────────────────────────────────────────────────────
+
+function getOpeningTitleCards() {
+  const values = state.openingTitles;
+  const title = String(values.title || '').trim();
+  const subtitle = String(values.subtitle || '').trim();
+  const author = String(values.author || '').trim();
+  const originallyPublished = String(values.originallyPublished || '').trim();
+  const site = String(values.site || '').trim();
+  const cards = [];
+  if (title || subtitle) {
+    cards.push({
+      type: 'title',
+      label: 'AUDIOBOOK PRESENTATION',
+      primary: title || subtitle,
+      secondary: title ? subtitle : ''
+    });
+  }
+  if (author) {
+    cards.push({ type: 'author', label: 'WRITTEN BY', primary: author, secondary: '' });
+  }
+  if (originallyPublished) {
+    cards.push({
+      type: 'published',
+      label: 'ORIGINALLY PUBLISHED',
+      primary: originallyPublished,
+      secondary: ''
+    });
+  }
+  if (site) {
+    cards.push({ type: 'site', label: 'DISCOVER MORE AT', primary: site, secondary: '' });
+  }
+  return cards;
+}
+
+function syncOpeningTitlesFromInputs() {
+  state.openingTitles = {
+    title: els.openingTitleInput.value,
+    subtitle: els.openingSubtitleInput.value,
+    author: els.openingAuthorInput.value,
+    originallyPublished: els.openingPublishedInput.value,
+    site: els.openingSiteInput.value
+  };
+}
+
+els.openingTitlesToggle.addEventListener('change', () => {
+  state.openingTitlesEnabled = els.openingTitlesToggle.checked;
+  els.openingTitlesSettings.style.display = state.openingTitlesEnabled ? 'flex' : 'none';
+  if (state.openingTitlesEnabled && getOpeningTitleCards().length > 0) {
+    state.previewMode = 'opening';
+    state.openingPreviewCardIndex = 0;
+  } else if (!state.openingTitlesEnabled) {
+    state.previewMode = 'chapter';
+  }
+  updatePreviewSelect();
+  refreshPreview();
+  saveSession();
+});
+
+for (const input of [
+  els.openingTitleInput,
+  els.openingSubtitleInput,
+  els.openingAuthorInput,
+  els.openingPublishedInput,
+  els.openingSiteInput
+]) {
+  input.addEventListener('input', () => {
+    syncOpeningTitlesFromInputs();
+    const cards = getOpeningTitleCards();
+    if (state.openingPreviewCardIndex >= cards.length) state.openingPreviewCardIndex = Math.max(0, cards.length - 1);
+    updatePreviewSelect();
+    refreshPreview();
+    saveSession();
+  });
+}
 
 // ─────────────────────────────────────────────────────────────
 // Intro Clip
@@ -1321,6 +1437,7 @@ function renderChapterList() {
 
     item.addEventListener('click', () => {
       state.selectedChapterIndex = i;
+      state.previewMode = 'chapter';
       els.previewChapterSelect.value = String(i);
       document.querySelectorAll('.chapter-item').forEach((el, j) => {
         el.classList.toggle('active', j === i);
@@ -1347,6 +1464,13 @@ function renderChapterList() {
 function updatePreviewSelect() {
   const sel = els.previewChapterSelect;
   sel.innerHTML = '';
+  const openingCards = state.openingTitlesEnabled ? getOpeningTitleCards() : [];
+  openingCards.forEach((card, index) => {
+    const opt = document.createElement('option');
+    opt.value = `opening:${index}`;
+    opt.textContent = `Opening · ${card.type === 'published' ? 'Originally Published' : card.type[0].toUpperCase() + card.type.slice(1)}`;
+    sel.appendChild(opt);
+  });
   state.chapters.forEach((ch, i) => {
     const opt = document.createElement('option');
     opt.value = String(i);
@@ -1355,13 +1479,27 @@ function updatePreviewSelect() {
       : ch.title;
     sel.appendChild(opt);
   });
-  sel.value = String(state.selectedChapterIndex);
+  if (state.previewMode === 'opening' && openingCards.length > 0) {
+    const safeIndex = Math.min(state.openingPreviewCardIndex, openingCards.length - 1);
+    state.openingPreviewCardIndex = safeIndex;
+    sel.value = `opening:${safeIndex}`;
+  } else {
+    state.previewMode = 'chapter';
+    sel.value = String(state.selectedChapterIndex);
+  }
 }
 
 els.previewChapterSelect.addEventListener('change', () => {
-  state.selectedChapterIndex = parseInt(els.previewChapterSelect.value);
+  const value = els.previewChapterSelect.value;
+  if (value.startsWith('opening:')) {
+    state.previewMode = 'opening';
+    state.openingPreviewCardIndex = Number(value.split(':')[1]) || 0;
+  } else {
+    state.previewMode = 'chapter';
+    state.selectedChapterIndex = parseInt(value);
+  }
   document.querySelectorAll('.chapter-item').forEach((el, j) => {
-    el.classList.toggle('active', j === state.selectedChapterIndex);
+    el.classList.toggle('active', state.previewMode === 'chapter' && j === state.selectedChapterIndex);
   });
   refreshPreview();
 });
@@ -1393,7 +1531,11 @@ async function doRenderPreview() {
   };
 
   try {
-    const params = buildRenderParams(chapter);
+    const openingCards = getOpeningTitleCards();
+    const openingPreviewCard = state.previewMode === 'opening'
+      ? openingCards[state.openingPreviewCardIndex] || null
+      : null;
+    const params = buildRenderParams(chapter, openingPreviewCard);
     const dataURL = await window.api.renderPreview(params);
 
     if (dataURL) {
@@ -1417,7 +1559,7 @@ async function doRenderPreview() {
   }
 }
 
-function buildRenderParams(chapter) {
+function buildRenderParams(chapter, openingPreviewCard = null) {
   return {
     coverDataURL: state.coverDataURL,
     bgDataURL: state.bgDataURL || null,
@@ -1432,7 +1574,8 @@ function buildRenderParams(chapter) {
     logoDataURL: state.logoProcessedDataURL || state.logoDataURL || null,
     transitionStyle: state.transitionStyle,
     transitionDuration: state.transitionDuration,
-    titleFontSize: state.titleFontSize  // 0 = auto, >0 = fixed px
+    titleFontSize: state.titleFontSize,  // 0 = auto, >0 = fixed px
+    openingPreviewCard
   };
 }
 
@@ -1485,6 +1628,8 @@ async function beginRender() {
     codec: state.codec,
     fastAudioCopy: state.fastAudioCopy,
     printPromoEnabled: state.printPromoEnabled,
+    openingTitlesEnabled: state.openingTitlesEnabled,
+    openingTitles: { ...state.openingTitles },
     forceLegacyRender: state.compatibilityMode,
     crf: 18
   };
@@ -1683,27 +1828,13 @@ function addLog(msg, type = '') {
 // ─────────────────────────────────────────────────────────────
 
 document.addEventListener('keydown', (e) => {
-  // Arrow keys to navigate chapters in preview
-  if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
-    if (state.chapters.length > 0 && state.selectedChapterIndex < state.chapters.length - 1) {
-      state.selectedChapterIndex++;
-      els.previewChapterSelect.value = String(state.selectedChapterIndex);
-      document.querySelectorAll('.chapter-item').forEach((el, j) => {
-        el.classList.toggle('active', j === state.selectedChapterIndex);
-      });
-      refreshPreview();
-    }
-  }
-  if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
-    if (state.chapters.length > 0 && state.selectedChapterIndex > 0) {
-      state.selectedChapterIndex--;
-      els.previewChapterSelect.value = String(state.selectedChapterIndex);
-      document.querySelectorAll('.chapter-item').forEach((el, j) => {
-        el.classList.toggle('active', j === state.selectedChapterIndex);
-      });
-      refreshPreview();
-    }
-  }
+  if (!['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].includes(e.key)) return;
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+  const direction = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : -1;
+  const nextIndex = Math.max(0, Math.min(els.previewChapterSelect.options.length - 1, els.previewChapterSelect.selectedIndex + direction));
+  if (nextIndex === els.previewChapterSelect.selectedIndex) return;
+  els.previewChapterSelect.selectedIndex = nextIndex;
+  els.previewChapterSelect.dispatchEvent(new Event('change'));
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -1738,6 +1869,8 @@ function saveSession() {
     introDurationRaw: state.introDurationRaw,
     fastAudioCopy: state.fastAudioCopy,
     printPromoEnabled: state.printPromoEnabled,
+    openingTitlesEnabled: state.openingTitlesEnabled,
+    openingTitles: { ...state.openingTitles },
     compatibilityMode: state.compatibilityMode,
     accentColor: state.accentColor,
     isCustomColor: state.isCustomColor
@@ -1807,6 +1940,23 @@ async function restoreSession() {
       }
       state.printPromoEnabled = d0.printPromoEnabled !== false;
       els.printPromoToggle.checked = state.printPromoEnabled;
+      state.openingTitlesEnabled = d0.openingTitlesEnabled === true;
+      state.openingTitles = {
+        title: '',
+        subtitle: '',
+        author: '',
+        originallyPublished: '',
+        site: 'scrollreader.com',
+        ...(d0.openingTitles || {})
+      };
+      els.openingTitlesToggle.checked = state.openingTitlesEnabled;
+      els.openingTitlesSettings.style.display = state.openingTitlesEnabled ? 'flex' : 'none';
+      els.openingTitleInput.value = state.openingTitles.title;
+      els.openingSubtitleInput.value = state.openingTitles.subtitle;
+      els.openingAuthorInput.value = state.openingTitles.author;
+      els.openingPublishedInput.value = state.openingTitles.originallyPublished;
+      els.openingSiteInput.value = state.openingTitles.site;
+      state.previewMode = 'chapter';
       if (d0.compatibilityMode !== undefined) {
         state.compatibilityMode = d0.compatibilityMode;
         els.compatibilityToggle.checked = d0.compatibilityMode;

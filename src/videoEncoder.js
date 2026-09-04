@@ -3,6 +3,7 @@ const fs = require('fs');
 const os = require('os');
 const { spawn } = require('child_process');
 const fluent = require('fluent-ffmpeg');
+const { resolveOpeningTitleSequence } = require('./openingTitles');
 let ffmpegPath = require('ffmpeg-static');
 let ffprobePath = require('@ffprobe-installer/ffprobe').path;
 
@@ -76,6 +77,8 @@ async function renderVideo(params, callbacks) {
     printPromoEnabled = true,
     printPromoStart = 30,
     printPromoDuration = 8,
+    openingTitlesEnabled = false,
+    openingTitles = {},
     titleFontSize = 0,
     bgOffsetY = 0
   } = params;
@@ -84,6 +87,7 @@ async function renderVideo(params, callbacks) {
     onProgress,
     onLog,
     renderFrame,
+    renderOpeningFrameToFile,
     renderPromotionOverlayToFile,
     isCancelled = () => false
   } = callbacks;
@@ -196,6 +200,69 @@ async function renderVideo(params, callbacks) {
       }
     }
 
+    const firstTransitionBudget = transitionStyle !== 'cut' && chapters.length > 1
+      ? transitionDuration / 2
+      : 0;
+    const openingSequence = openingTitlesEnabled
+      ? resolveOpeningTitleSequence(
+          openingTitles,
+          Math.max(0, chapters[0].endTime - chapters[0].startTime - firstTransitionBudget - (1 / OUTPUT_FPS)),
+          OUTPUT_FPS
+        )
+      : null;
+    let openingSegmentPath = null;
+
+    if (openingTitlesEnabled) {
+      if (!openingSequence) {
+        onLog('⚠ Opening titles skipped because no completed cards fit inside the first chapter.');
+      } else {
+        if (!renderOpeningFrameToFile) throw new Error('Opening title renderer callback is unavailable.');
+        const openingDir = path.join(tmpDir, 'opening_titles');
+        fs.mkdirSync(openingDir, { recursive: true });
+        onLog(`\n✨ Rendering ${openingSequence.cards.length} opening title card${openingSequence.cards.length === 1 ? '' : 's'} (${openingSequence.duration.toFixed(1)}s)...`);
+
+        for (let frame = 0; frame < openingSequence.frameCount; frame++) {
+          if (isCancelled()) throw new Error('RENDER_CANCELLED');
+          const framePath = path.join(openingDir, `f_${String(frame).padStart(4, '0')}.png`);
+          await renderOpeningFrameToFile({
+            coverDataURL,
+            bgDataURL: bgDataURL || coverDataURL,
+            blurAmount,
+            bgOpacity,
+            bgOffsetY,
+            chapter: chapters[0],
+            accentColor,
+            logoDataURL,
+            coverBorderWidth,
+            titleFontSize,
+            openingSequenceFrame: {
+              cards: openingSequence.cards,
+              time: frame / OUTPUT_FPS,
+              duration: openingSequence.duration
+            }
+          }, framePath);
+          onProgress({
+            phase: 'frames',
+            current: frame + 1,
+            total: openingSequence.frameCount,
+            percent: 30 + Math.round(((frame + 1) / openingSequence.frameCount) * 10)
+          });
+        }
+
+        openingSegmentPath = path.join(tmpDir, 'opening_titles.mp4');
+        await encodeFrameSequence({
+          frameDir: openingDir,
+          outputPath: openingSegmentPath,
+          fps: OUTPUT_FPS,
+          duration: openingSequence.duration,
+          crf,
+          useGPU,
+          codec,
+          isCancelled
+        });
+      }
+    }
+
     // ── 4. Encode chapter segments in parallel batches ───────────────────────
     onLog(`\n🎞️ Encoding ${chapters.length} segments at ${OUTPUT_FPS}fps (${parallelism} at a time, ${useGPU ? 'GPU' : 'CPU'})...`);
 
@@ -231,7 +298,8 @@ async function renderVideo(params, callbacks) {
                                + (hasTrailing ? transitionDuration / 2 : 0);
 
         // Snap to whole frames; keep minimum of one frame (0.2s at 5fps)
-        const adjustedDuration = Math.max(1 / OUTPUT_FPS, rawDuration - transitionBudget);
+        const openingBudget = i === 0 && openingSequence ? openingSequence.duration : 0;
+        const adjustedDuration = Math.max(1 / OUTPUT_FPS, rawDuration - transitionBudget - openingBudget);
         const frames   = Math.round(adjustedDuration * OUTPUT_FPS);
         const duration = frames / OUTPUT_FPS;
 
@@ -255,6 +323,7 @@ async function renderVideo(params, callbacks) {
 
     // Build interleaved list: seg0, [trans0], seg1, [trans1], ... segN
     const allSegs = [];
+    if (openingSegmentPath) allSegs.push(openingSegmentPath);
     for (let i = 0; i < segmentPaths.length; i++) {
       allSegs.push(segmentPaths[i]);
       if (transSegmentPaths[i]) allSegs.push(transSegmentPaths[i]);

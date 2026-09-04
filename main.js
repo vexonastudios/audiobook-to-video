@@ -367,6 +367,7 @@ ipcMain.handle('start-render', async (event, params) => {
       renderFrame: renderFrameInWindow,
       prepareFrameRenderer,
       renderFrameToFile,
+      renderOpeningFrameToFile,
       renderTransitionFrameToFile,
       renderPromotionFrameToFile,
       renderPromotionOverlayToFile,
@@ -454,6 +455,13 @@ async function renderFrameToFile(params, outputPath) {
   await ensureFrameWindowReady();
   return frameWindow.webContents.executeJavaScript(
     `window.renderFrameToFile(${JSON.stringify(params)}, ${JSON.stringify(outputPath)})`
+  );
+}
+
+async function renderOpeningFrameToFile(params, outputPath) {
+  await ensureFrameWindowReady();
+  return frameWindow.webContents.executeJavaScript(
+    `window.renderOpeningFrameToFile(${JSON.stringify(params)}, ${JSON.stringify(outputPath)})`
   );
 }
 

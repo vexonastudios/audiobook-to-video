@@ -49,6 +49,7 @@
   const FRAME_WIDTH = 1920;
   const FRAME_HEIGHT = 1080;
   const RENDER_SCALE = FRAME_WIDTH / LOGICAL_WIDTH;
+  const { resolveOpeningTitleFrame } = require('../src/openingTitles');
   let renderBaseParams = {};
 
   function configureRenderContext(ctx) {
@@ -186,6 +187,170 @@
     ctx.closePath();
   }
 
+  function drawChapterText(ctx, params, opacity = 1, offsetY = 0) {
+    const {
+      chapter,
+      accentColor = [201, 169, 110],
+      titleFontSize: fixedFontSize = 0
+    } = params;
+    const W = LOGICAL_WIDTH;
+    const [ar, ag, ab] = accentColor;
+    const accentCSS = `rgb(${ar},${ag},${ab})`;
+    const textAreaX = 520;
+    const textAreaW = W - textAreaX - 40;
+    const textCenterX = textAreaX + textAreaW / 2;
+    const hasNumber = chapter.isNumbered && chapter.number !== null;
+    const fixedAnchorY = chapter.dateRange ? 230 : 270;
+
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
+    ctx.translate(0, offsetY);
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+
+    if (hasNumber) {
+      const labelFontSize = 24;
+      ctx.font = `400 ${labelFontSize}px "EB Garamond"`;
+      ctx.fillStyle = accentCSS;
+      const labelY = fixedAnchorY;
+      drawTracked(ctx, `CHAPTER ${chapter.number}`, textCenterX, labelY, 4.5);
+
+      const lineW = 120;
+      ctx.strokeStyle = `rgba(${ar},${ag},${ab},0.45)`;
+      ctx.lineWidth = 1;
+      const lineY = labelY + 28;
+      ctx.beginPath();
+      ctx.moveTo(textCenterX - lineW / 2, lineY);
+      ctx.lineTo(textCenterX + lineW / 2, lineY);
+      ctx.stroke();
+
+      let fontSize, lines;
+      if (fixedFontSize > 0) {
+        fontSize = fixedFontSize;
+        ctx.font = `400 ${fontSize}px "EB Garamond"`;
+        lines = wrapText(ctx, chapter.title, textAreaW - 40);
+      } else {
+        ({ fontSize, lines } = fitText(ctx, chapter.title, 'EB Garamond', 72, 32, textAreaW - 40, 260));
+        ctx.font = `400 ${fontSize}px "EB Garamond"`;
+      }
+      ctx.fillStyle = 'rgba(255,255,255,0.96)';
+
+      const lineH = fontSize * 1.28;
+      const titleStartY = lineY + 38 + (fontSize / 2);
+      lines.forEach((line, i) => ctx.fillText(line, textCenterX, titleStartY + i * lineH));
+
+      if (chapter.dateRange) {
+        const drFontSize = Math.max(26, fontSize * 0.55);
+        ctx.font = `italic 400 ${drFontSize}px "EB Garamond"`;
+        ctx.fillStyle = accentCSS;
+        const drY = titleStartY + lines.length * lineH + drFontSize * 0.6;
+        ctx.fillText(chapter.dateRange, textCenterX, drY);
+      }
+    } else {
+      let fontSize, lines;
+      if (fixedFontSize > 0) {
+        fontSize = fixedFontSize;
+        ctx.font = `400 ${fontSize}px "EB Garamond"`;
+        lines = wrapText(ctx, chapter.title, textAreaW - 40);
+      } else {
+        ({ fontSize, lines } = fitText(ctx, chapter.title, 'EB Garamond', 80, 36, textAreaW - 40, 300));
+        ctx.font = `400 ${fontSize}px "EB Garamond"`;
+      }
+      ctx.fillStyle = 'rgba(255,255,255,0.96)';
+
+      const lineH = fontSize * 1.28;
+      const titleStartY = fixedAnchorY + 28 + 38 + (fontSize / 2);
+      lines.forEach((line, i) => ctx.fillText(line, textCenterX, titleStartY + i * lineH));
+
+      if (chapter.dateRange) {
+        const drFontSize = Math.max(28, fontSize * 0.55);
+        ctx.font = `italic 400 ${drFontSize}px "EB Garamond"`;
+        ctx.fillStyle = accentCSS;
+        const drY = titleStartY + lines.length * lineH + drFontSize * 0.6;
+        ctx.fillText(chapter.dateRange, textCenterX, drY);
+      }
+    }
+
+    ctx.restore();
+  }
+
+  function drawOpeningTitleCard(ctx, card, params, opacity = 1, offsetY = 0) {
+    if (!card || opacity <= 0) return;
+
+    const W = LOGICAL_WIDTH;
+    const [ar, ag, ab] = params.accentColor || [201, 169, 110];
+    const accentCSS = `rgb(${ar},${ag},${ab})`;
+    const textAreaX = 520;
+    const textAreaW = W - textAreaX - 40;
+    const centerX = textAreaX + textAreaW / 2;
+
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
+    ctx.translate(0, offsetY);
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+
+    ctx.font = '500 17px "EB Garamond"';
+    ctx.fillStyle = accentCSS;
+    drawTracked(ctx, card.label, centerX, 245, 3.5);
+
+    const lineY = 277;
+    const lineW = 136;
+    ctx.strokeStyle = `rgba(${ar},${ag},${ab},0.58)`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(centerX - lineW / 2, lineY);
+    ctx.lineTo(centerX + lineW / 2, lineY);
+    ctx.stroke();
+    ctx.fillStyle = accentCSS;
+    ctx.beginPath();
+    ctx.arc(centerX, lineY, 2.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    const maxSize = card.type === 'title' ? 67 : (card.type === 'published' ? 78 : 70);
+    const minSize = card.type === 'site' ? 30 : 32;
+    const fitted = fitText(ctx, card.primary, 'EB Garamond', maxSize, minSize, textAreaW - 54, 235);
+    const fontWeight = card.type === 'title' ? 500 : 400;
+    ctx.font = `${fontWeight} ${fitted.fontSize}px "EB Garamond"`;
+    ctx.fillStyle = card.type === 'site' ? accentCSS : 'rgba(255,255,255,0.97)';
+    const lineH = fitted.fontSize * 1.17;
+    const blockHeight = fitted.lines.length * lineH;
+    const primaryY = 383 - blockHeight / 2 + lineH / 2;
+    fitted.lines.forEach((line, index) => ctx.fillText(line, centerX, primaryY + index * lineH));
+
+    if (card.secondary) {
+      const secondary = fitText(ctx, card.secondary, 'EB Garamond', 35, 23, textAreaW - 90, 115);
+      ctx.font = `italic 400 ${secondary.fontSize}px "EB Garamond"`;
+      ctx.fillStyle = `rgba(${ar},${ag},${ab},0.92)`;
+      const secondaryY = primaryY + fitted.lines.length * lineH + 32;
+      secondary.lines.forEach((line, index) => {
+        ctx.fillText(line, centerX, secondaryY + index * secondary.fontSize * 1.16);
+      });
+    }
+
+    ctx.restore();
+  }
+
+  function drawOpeningSequenceText(ctx, params) {
+    if (params.openingPreviewCard) {
+      drawOpeningTitleCard(ctx, params.openingPreviewCard, params, 1, 0);
+      return;
+    }
+
+    const sequence = params.openingSequenceFrame;
+    const frame = resolveOpeningTitleFrame(sequence.cards, sequence.time, sequence.duration);
+    if (frame.fromCard) {
+      const fromOpacity = frame.toCard || frame.toChapter ? 1 - frame.mix : 1;
+      drawOpeningTitleCard(ctx, frame.fromCard, params, fromOpacity, -10 * frame.mix);
+    }
+    if (frame.toCard) {
+      drawOpeningTitleCard(ctx, frame.toCard, params, frame.mix, 14 * (1 - frame.mix));
+    }
+    if (frame.toChapter) {
+      drawChapterText(ctx, params, frame.mix, 12 * (1 - frame.mix));
+    }
+  }
+
   // ─────────────────────────────────────────────────────────────
   // Core rendering function — draws one complete 1920x1080 frame
   // ─────────────────────────────────────────────────────────────
@@ -199,13 +364,10 @@
       bgOpacity = 0.65,
       accentColor = [201, 169, 110],
       logoDataURL = null,
-      coverBorderWidth = 0,
-      titleFontSize: fixedFontSize = 0
+      coverBorderWidth = 0
     } = params;
 
     const W = LOGICAL_WIDTH, H = LOGICAL_HEIGHT;
-    const [ar, ag, ab] = accentColor;
-    const accentCSS = `rgb(${ar},${ag},${ab})`;
 
     configureRenderContext(ctx);
 
@@ -278,100 +440,12 @@
     ctx.drawImage(coverImg, cx, cy, cw, ch);
     ctx.restore();
 
-    // ── 3. Chapter text (right side) ───────────────────────────
-    const textAreaX = 520;
-    const textAreaW = W - textAreaX - 40;
-    const textCenterX = textAreaX + textAreaW / 2;
-
-    // Anchor the top of the text block so all chapters start at the exact same Y position
-    const hasNumber = chapter.isNumbered && chapter.number !== null;
-    const fixedAnchorY = chapter.dateRange ? 230 : 270;
-
-    ctx.save();
-    ctx.textBaseline = 'middle';
-    ctx.textAlign = 'center';
-
-    if (hasNumber) {
-      // "CHAPTER N" label
-      const labelFontSize = 24;
-      ctx.font = `400 ${labelFontSize}px "EB Garamond"`;
-      ctx.fillStyle = accentCSS;
-      const labelY = fixedAnchorY;
-      drawTracked(ctx, `CHAPTER ${chapter.number}`, textCenterX, labelY, 4.5);
-
-      // Subtle separator line
-      const lineW = 120;
-      ctx.strokeStyle = `rgba(${ar},${ag},${ab},0.45)`;
-      ctx.lineWidth = 1;
-      const lineY = labelY + 28; // Increased gap between label and line
-      ctx.beginPath();
-      ctx.moveTo(textCenterX - lineW / 2, lineY);
-      ctx.lineTo(textCenterX + lineW / 2, lineY);
-      ctx.stroke();
-
-      // Chapter title (large)
-      // If a fixed font size is set, use it directly (still word-wraps).
-      // Otherwise auto-fit to the available box.
-      let fontSize, lines;
-      if (fixedFontSize > 0) {
-        fontSize = fixedFontSize;
-        ctx.font = `400 ${fontSize}px "EB Garamond"`; // must set font BEFORE wrapText so measureText is correct
-        lines = wrapText(ctx, chapter.title, textAreaW - 40);
-      } else {
-        ({ fontSize, lines } = fitText(ctx, chapter.title, 'EB Garamond', 72, 32, textAreaW - 40, 260));
-        ctx.font = `400 ${fontSize}px "EB Garamond"`;
-      }
-      ctx.fillStyle = 'rgba(255,255,255,0.96)';
-
-      const lineH = fontSize * 1.28;
-      // Fixed distance from the separator line to the first line of the title!
-      const titleStartY = lineY + 38 + (fontSize / 2);
-
-      lines.forEach((line, i) => {
-        ctx.fillText(line, textCenterX, titleStartY + i * lineH);
-      });
-
-      // Date range subtitle (e.g. "1826–1829")
-      if (chapter.dateRange) {
-        const drFontSize = Math.max(26, fontSize * 0.55);
-        ctx.font = `italic 400 ${drFontSize}px "EB Garamond"`;
-        ctx.fillStyle = accentCSS;
-        const drY = titleStartY + lines.length * lineH + drFontSize * 0.6;
-        ctx.fillText(chapter.dateRange, textCenterX, drY);
-      }
-
+    // ── 3. Right-side content ───────────────────────────────────
+    if (params.openingPreviewCard || params.openingSequenceFrame) {
+      drawOpeningSequenceText(ctx, params);
     } else {
-      // Unnumbered (e.g. "Introduction") — just the title, larger, centered
-      let fontSize, lines;
-      if (fixedFontSize > 0) {
-        fontSize = fixedFontSize;
-        ctx.font = `400 ${fontSize}px "EB Garamond"`; // must set font BEFORE wrapText so measureText is correct
-        lines = wrapText(ctx, chapter.title, textAreaW - 40);
-      } else {
-        ({ fontSize, lines } = fitText(ctx, chapter.title, 'EB Garamond', 80, 36, textAreaW - 40, 300));
-        ctx.font = `400 ${fontSize}px "EB Garamond"`;
-      }
-      ctx.fillStyle = 'rgba(255,255,255,0.96)';
-
-      const lineH = fontSize * 1.28;
-      // Start at the same vertical place the title would normally start
-      const titleStartY = fixedAnchorY + 28 + 38 + (fontSize / 2);
-
-      lines.forEach((line, i) => {
-        ctx.fillText(line, textCenterX, titleStartY + i * lineH);
-      });
-
-      // Date range subtitle
-      if (chapter.dateRange) {
-        const drFontSize = Math.max(28, fontSize * 0.55);
-        ctx.font = `italic 400 ${drFontSize}px "EB Garamond"`;
-        ctx.fillStyle = accentCSS;
-        const drY = titleStartY + lines.length * lineH + drFontSize * 0.6;
-        ctx.fillText(chapter.dateRange, textCenterX, drY);
-      }
+      drawChapterText(ctx, params);
     }
-
-    ctx.restore();
 
     // ── 4. Logo (bottom right) ─────────────────────────────────
     if (logoDataURL) {
@@ -562,6 +636,12 @@
   };
 
   window.renderFrameToFile = async function(params, filePath) {
+    await window.renderFrame({ ...renderBaseParams, ...params });
+    await writeCanvasPng(filePath);
+    return true;
+  };
+
+  window.renderOpeningFrameToFile = async function(params, filePath) {
     await window.renderFrame({ ...renderBaseParams, ...params });
     await writeCanvasPng(filePath);
     return true;

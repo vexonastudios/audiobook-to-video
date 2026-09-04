@@ -24,7 +24,8 @@ Example Format:
 ## 4. Adjust Styles & Preview (Center Panel)
 - Use the sliders on the left to adjust background blur and opacity.
 - Pick a **Transition Style** (like Fade, Cross Dissolve, or Zoom Blur) and set its duration. 
-- Use the **Preview** section's dropdown above the canvas to see exactly what each chapter will look like.
+- Enable **Opening Title Sequence** to rotate the book title/subtitle, author, original publication, and site through the right-side title area at the start. Each completed card lasts about three seconds; the cover remains fixed and chapter/audio timing does not change.
+- Use the **Preview** section's dropdown above the canvas to inspect every opening card and chapter layout.
 
 ## 5. Render Video
 Before rendering, leave **Print Edition Promotion** enabled if the book is also sold in print or Kindle format. At 0:30 of the audiobook, the video will briefly show the selected cover and direct viewers to the Amazon link in the description. Turn it off for audiobook-only titles.

@@ -4,6 +4,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 const fluent = require('fluent-ffmpeg');
+const { resolveOpeningTitleSequence } = require('./openingTitles');
 
 let ffmpegPath = require('ffmpeg-static');
 let ffprobePath = require('@ffprobe-installer/ffprobe').path;
@@ -53,6 +54,8 @@ async function renderVideo(params, callbacks) {
     printPromoEnabled = true,
     printPromoStart = 30,
     printPromoDuration = 8,
+    openingTitlesEnabled = false,
+    openingTitles = {},
     titleFontSize = 0,
     audioCacheDir = path.join(os.tmpdir(), 'audiobook-video-generator-audio-cache')
   } = params;
@@ -62,6 +65,7 @@ async function renderVideo(params, callbacks) {
     onLog,
     prepareFrameRenderer,
     renderFrameToFile,
+    renderOpeningFrameToFile,
     renderTransitionFrameToFile,
     renderPromotionFrameToFile,
     isCancelled = () => false
@@ -153,7 +157,7 @@ async function renderVideo(params, callbacks) {
           nextChapter: null
         }, framePath);
         paths.push(framePath);
-        reportProgress(2 + ((i + 1) / chapters.length) * 13, `Rendered still ${i + 1} / ${chapters.length}`);
+        reportProgress(2 + ((i + 1) / chapters.length) * 10, `Rendered still ${i + 1} / ${chapters.length}`);
       }
       return paths;
     });
@@ -183,12 +187,56 @@ async function renderVideo(params, callbacks) {
           }, framePath);
           paths.push(framePath);
           renderedFrames++;
-          reportProgress(15 + (renderedFrames / totalFrames) * 15, `Rendered transition frame ${renderedFrames} / ${totalFrames}`);
+          reportProgress(12 + (renderedFrames / totalFrames) * 10, `Rendered transition frame ${renderedFrames} / ${totalFrames}`);
         }
         groups.push(paths);
       }
       return groups;
     });
+
+    const firstChapterDuration = chapters[0].endTime - chapters[0].startTime;
+    const firstChapterTransitionBudget = transitionStyle !== 'cut' && chapters.length > 1
+      ? transitionDuration / 2
+      : 0;
+    const openingSequence = openingTitlesEnabled
+      ? resolveOpeningTitleSequence(
+          openingTitles,
+          Math.max(0, firstChapterDuration - firstChapterTransitionBudget - FRAME_DURATION),
+          OUTPUT_FPS
+        )
+      : null;
+
+    const openingEntries = openingTitlesEnabled
+      ? await timed('Opening title rendering', async () => {
+          if (!openingSequence) {
+            onLog('⚠ Opening titles skipped because no completed cards fit inside the first chapter.');
+            return [];
+          }
+          if (!renderOpeningFrameToFile) throw new Error('Opening title renderer callback is unavailable.');
+
+          const openingDir = path.join(tmpDir, 'opening_titles');
+          fs.mkdirSync(openingDir, { recursive: true });
+          const entries = [];
+          onLog(`\n✨ Rendering ${openingSequence.cards.length} opening title card${openingSequence.cards.length === 1 ? '' : 's'} (${openingSequence.duration.toFixed(1)}s)...`);
+
+          for (let frame = 0; frame < openingSequence.frameCount; frame++) {
+            if (cancelled()) throw new Error('RENDER_CANCELLED');
+            const framePath = path.join(openingDir, `f_${String(frame).padStart(4, '0')}.png`);
+            await renderOpeningFrameToFile({
+              chapter: chapters[0],
+              openingSequenceFrame: {
+                cards: openingSequence.cards,
+                time: frame / OUTPUT_FPS,
+                duration: openingSequence.duration
+              }
+            }, framePath);
+            entries.push({ path: framePath, duration: FRAME_DURATION, kind: 'opening' });
+            reportProgress(22 + ((frame + 1) / openingSequence.frameCount) * 6, `Rendered opening title frame ${frame + 1} / ${openingSequence.frameCount}`);
+          }
+
+          return entries;
+        })
+      : [];
 
     let timelineEntries = buildTimelineEntries({
       chapters,
@@ -198,6 +246,15 @@ async function renderVideo(params, callbacks) {
       transitionDuration,
       totalDuration
     });
+
+    if (openingEntries.length > 0) {
+      timelineEntries = replaceTimelineRange(
+        timelineEntries,
+        0,
+        openingSequence.duration,
+        openingEntries
+      );
+    }
 
     if (printPromoEnabled) {
       timelineEntries = await timed('Print promotion rendering', async () => {
@@ -226,7 +283,7 @@ async function renderVideo(params, callbacks) {
             duration: sample.duration,
             kind: 'promotion'
           });
-          reportProgress(25 + ((i + 1) / samplePlan.length) * 5, `Rendered promotion frame ${i + 1} / ${samplePlan.length}`);
+          reportProgress(28 + ((i + 1) / samplePlan.length) * 4, `Rendered promotion frame ${i + 1} / ${samplePlan.length}`);
         }
 
         return replaceTimelineRange(
@@ -247,11 +304,11 @@ async function renderVideo(params, callbacks) {
       if (safeFade < overlapFade) onLog(`⚠ Intro fade shortened to ${safeFade.toFixed(2)}s to fit the opening chapter.`);
 
       visualVideoPath = await timed('Intro overlap video assembly', async () => {
-        reportProgress(31, 'Encoding intro overlap...');
+        reportProgress(33, 'Encoding intro overlap...');
         const headPath = path.join(tmpDir, 'intro_overlap_head.mp4');
         await encodeOverlapHeadVideo({
           introClipPath,
-          firstStillPath: chapterFramePaths[0],
+          firstStillPath: timelineEntries[0].path,
           introDuration: introData.duration,
           fadeDuration: safeFade,
           outputPath: headPath,
@@ -283,7 +340,7 @@ async function renderVideo(params, callbacks) {
 
     } else {
       visualVideoPath = await timed('Visual timeline encoding', async () => {
-        reportProgress(31, 'Encoding timestamped visual timeline...');
+        reportProgress(33, 'Encoding visual timeline...');
         const resultPath = path.join(tmpDir, 'visual_main.mp4');
         await encodeVisualTimeline({
           entries: timelineEntries,
@@ -294,7 +351,7 @@ async function renderVideo(params, callbacks) {
           codec,
           crf,
           isCancelled: cancelled,
-          onProgress: seconds => reportProgress(31 + (seconds / Math.max(1, totalDuration)) * 29, 'Encoding timestamped visual timeline...')
+          onProgress: seconds => reportProgress(33 + (seconds / Math.max(1, totalDuration)) * 27, 'Encoding visual timeline...')
         });
         return resultPath;
       });

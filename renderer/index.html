@@ -159,7 +159,43 @@
 
       <div class="panel-section">
         <div class="section-header-toggle">
-          <h3 class="section-title">3. Video Intro</h3>
+          <h3 class="section-title">3. Opening Title Sequence</h3>
+          <label class="toggle-switch" title="Rotate book details in the chapter-title area at the start of the audiobook">
+            <input type="checkbox" id="opening-titles-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div id="opening-titles-settings" class="opening-titles-settings" style="display:none">
+          <label class="metadata-field">
+            <span>Title</span>
+            <input id="opening-title-input" class="metadata-input" type="text" maxlength="140" placeholder="Book title" autocomplete="off">
+          </label>
+          <label class="metadata-field">
+            <span>Subtitle</span>
+            <input id="opening-subtitle-input" class="metadata-input" type="text" maxlength="180" placeholder="Optional subtitle" autocomplete="off">
+          </label>
+          <label class="metadata-field">
+            <span>Author</span>
+            <input id="opening-author-input" class="metadata-input" type="text" maxlength="100" placeholder="Author name" autocomplete="off">
+          </label>
+          <div class="metadata-field-grid">
+            <label class="metadata-field">
+              <span>Originally published</span>
+              <input id="opening-published-input" class="metadata-input" type="text" maxlength="60" placeholder="e.g. 1910" autocomplete="off">
+            </label>
+            <label class="metadata-field">
+              <span>Site</span>
+              <input id="opening-site-input" class="metadata-input" type="text" maxlength="100" value="scrollreader.com" autocomplete="off">
+            </label>
+          </div>
+          <p class="metadata-help">Completed details rotate in the right-side title area for about 3 seconds each, then dissolve into the first chapter. Audio and chapter times do not move.</p>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="section-header-toggle">
+          <h3 class="section-title">4. Video Intro</h3>
           <label class="toggle-switch">
             <input type="checkbox" id="intro-enable-toggle">
             <span class="toggle-slider"></span>
@@ -473,7 +509,7 @@
         <p>Use the sliders on the left to adjust background blur and opacity. You can also pick a <strong>Transition Style</strong> (like Fade, Cross Dissolve, or Zoom Blur) and set its duration. Use the <strong>Preview</strong> section's dropdown to see exactly what each chapter will look like.</p>
 
         <h3>5. Render Video</h3>
-        <p>Once your fields are filled and chapters are parsed, click <strong>Render Video</strong>. The optimized renderer stores one high-resolution still per chapter, builds a compatible constant-30fps stream, and uses your <strong>NVIDIA RTX GPU (NVENC)</strong> for video encoding when available. When <strong>Print Edition Promotion</strong> is enabled, a lower-third card appears 30 seconds into the audiobook. Choose <strong>H.264</strong> for max compatibility or <strong>H.265 HEVC</strong> for ~40% smaller file sizes. Use <strong>Compatibility Mode</strong> only if a particular media file has trouble with the optimized renderer.</p>
+        <p>Enable <strong>Opening Title Sequence</strong> to rotate the book title, subtitle, author, original publication, and site through the right-side title area before the first chapter appears. The cover stays fixed and audio/chapter timing does not move. Once your fields are filled and chapters are parsed, click <strong>Render Video</strong>. The optimized renderer builds a compatible constant-30fps stream and uses your <strong>NVIDIA RTX GPU (NVENC)</strong> when available. When <strong>Print Edition Promotion</strong> is enabled, a lower-third card appears 30 seconds into the audiobook. Choose <strong>H.264</strong> for max compatibility or <strong>H.265 HEVC</strong> for ~40% smaller file sizes.</p>
       </div>
     </div>
   </div>

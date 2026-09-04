@@ -39,6 +39,7 @@ async function runTest() {
     ]);
 
     const execute = expression => frameWindow.webContents.executeJavaScript(expression);
+    let openingFramesRendered = 0;
     await renderVideoLegacy({
       coverDataURL,
       bgDataURL: coverDataURL,
@@ -51,6 +52,8 @@ async function runTest() {
       transitionStyle: 'cut',
       codec: 'h264',
       fastAudioCopy: true,
+      openingTitlesEnabled: true,
+      openingTitles: { title: 'Legacy Opening Test' },
       printPromoEnabled: true,
       printPromoStart: 1,
       printPromoDuration: 2
@@ -58,6 +61,10 @@ async function runTest() {
       onProgress: () => {},
       onLog: () => {},
       renderFrame: params => execute(`(async()=>{await window.renderFrame(${JSON.stringify(params)});return document.getElementById('mainCanvas').toDataURL('image/png')})()`),
+      renderOpeningFrameToFile: (params, targetPath) => {
+        openingFramesRendered++;
+        return execute(`window.renderOpeningFrameToFile(${JSON.stringify(params)}, ${JSON.stringify(targetPath)})`);
+      },
       renderPromotionOverlayToFile: (params, targetPath) => execute(
         `window.renderPromotionOverlayToFile(${JSON.stringify(params)}, ${JSON.stringify(targetPath)})`
       ),
@@ -72,6 +79,9 @@ async function runTest() {
     const video = metadata.streams.find(stream => stream.codec_type === 'video');
     if (!video || video.time_base !== '1/3000') {
       throw new Error(`Legacy output expected decoder-safe 1/3000 video time base, got ${video?.time_base || 'none'}`);
+    }
+    if (openingFramesRendered !== 90) {
+      throw new Error(`Legacy opening titles expected 90 rendered frames, got ${openingFramesRendered}`);
     }
 
     const beforePath = path.join(root, 'before.png');

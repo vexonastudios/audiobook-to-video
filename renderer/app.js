@@ -56,7 +56,7 @@ const state = {
   codec: 'h264',             // 'h264' | 'h265'
   fastAudioCopy: true,
   printPromoEnabled: true,
-  compatibilityMode: false,  // use the legacy constant-30fps renderer
+  compatibilityMode: false,  // use the legacy segmented renderer
   gpuStatus: 'unknown',       // 'unknown' | 'gpu' | 'cpu'
   gpuName: 'GPU'              // actual GPU name detected at runtime
 };

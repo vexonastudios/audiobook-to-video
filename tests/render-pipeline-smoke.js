@@ -17,7 +17,7 @@ function run(command, args) {
 function probe(filePath) {
   return JSON.parse(run(ffprobePath, [
     '-v', 'error', '-count_frames',
-    '-show_entries', 'format=duration:stream=codec_type,codec_name,width,height,nb_read_frames,time_base,duration_ts',
+    '-show_entries', 'format=duration:stream=codec_type,codec_name,width,height,nb_read_frames,r_frame_rate,avg_frame_rate,time_base,duration_ts',
     '-of', 'json', filePath
   ]));
 }
@@ -66,6 +66,9 @@ async function runScenario({
   if (video.time_base !== '1/3000') {
     throw new Error(`${name}: expected decoder-safe 1/3000 video time base, got ${video.time_base}`);
   }
+  if (video.r_frame_rate !== '30/1' || video.avg_frame_rate !== '30/1') {
+    throw new Error(`${name}: expected genuine constant 30fps video, got nominal ${video.r_frame_rate} / average ${video.avg_frame_rate}`);
+  }
   const expectedVideoCodec = codec === 'h265' ? 'hevc' : 'h264';
   if (video.codec_name !== expectedVideoCodec) {
     throw new Error(`${name}: expected ${expectedVideoCodec} video, got ${video.codec_name}`);
@@ -76,12 +79,17 @@ async function runScenario({
   if (Math.abs(duration - expectedDuration) > 0.1) {
     throw new Error(`${name}: duration ${duration}s differs from expected ${expectedDuration}s`);
   }
+  const frameCount = Number(video.nb_read_frames);
+  const expectedFrames = Math.round(expectedDuration * 30);
+  if (Math.abs(frameCount - expectedFrames) > 2) {
+    throw new Error(`${name}: expected about ${expectedFrames} actual frames, got ${frameCount}`);
+  }
   run(ffmpegPath, ['-hide_banner', '-loglevel', 'error', '-i', outputPath, '-f', 'null', nullOutput]);
   run(ffmpegPath, [
     '-hide_banner', '-loglevel', 'error', '-ss', String(expectedDuration * 0.75),
     '-i', outputPath, '-frames:v', '1', '-f', 'null', nullOutput
   ]);
-  return { name, duration, frames: Number(video.nb_read_frames) };
+  return { name, duration, frames: frameCount };
 }
 
 async function main() {

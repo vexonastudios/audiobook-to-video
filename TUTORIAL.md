@@ -29,6 +29,6 @@ Example Format:
 ## 5. Render Video
 Before rendering, leave **Print Edition Promotion** enabled if the book is also sold in print or Kindle format. At 0:30 of the audiobook, the video will briefly show the selected cover and direct viewers to the Amazon link in the description. Turn it off for audiobook-only titles.
 
-Once your fields are filled and chapters are parsed, click **Render Video**. The optimized renderer stores one high-resolution still per chapter and only creates additional frames for transitions, intros, or the short promotional card. Compatible compressed audio is copied directly, while other audio is cached after its first conversion. You can track progress in the log box at the bottom.
+Once your fields are filled and chapters are parsed, click **Render Video**. The optimized renderer stores one high-resolution still per chapter, creates additional artwork only for transitions, intros, or the short promotional card, and then builds a broadly compatible constant-30fps video. Compatible compressed audio is copied directly, while other audio is cached after its first conversion. You can track progress in the log box at the bottom.
 
-If a particular media file has trouble with the optimized renderer, enable **Compatibility Mode** in the export section to use the former constant-30fps process. This fallback is substantially slower.
+If a particular media file has trouble with the optimized renderer, enable **Compatibility Mode** in the export section to use the former segmented process. This fallback is substantially slower.

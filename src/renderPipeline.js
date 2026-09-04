@@ -22,10 +22,8 @@ const FRAME_DURATION = 1 / OUTPUT_FPS;
 // safe for nearly 199 hours. A 90000 timescale overflows that boundary at
 // 6:37:41 and can produce a green video surface in Windows Media Player.
 const VIDEO_TRACK_TIMESCALE = 3000;
-// Sparse samples separated by many minutes are legal VFR, but several players
-// display the nearest sample instead of holding the preceding one. Reusing the
-// same rendered PNG once per second keeps seeking deterministic while retaining
-// a ~30x reduction versus constant 30fps chapter rendering.
+// Keep source-image samples close enough together that FFmpeg can build the
+// constant-frame-rate stream without ambiguous chapter-boundary rounding.
 const MAX_HOLD_SAMPLE_DURATION = 1;
 
 const nvencAvailability = new Map();
@@ -99,7 +97,7 @@ async function renderVideo(params, callbacks) {
 
   try {
     const useGPU = await detectNvenc(codec, onLog);
-    onLog(`\n🚀 Optimized timeline: ${OUTPUT_SIZE}, variable frame rate, ${useGPU ? 'NVENC' : 'CPU'}`);
+    onLog(`\n🚀 Optimized timeline: ${OUTPUT_SIZE}, constant ${OUTPUT_FPS}fps, ${useGPU ? 'NVENC' : 'CPU'}`);
 
     const introData = introClipPath ? await probeMedia(introClipPath) : null;
     const overlapFade = introClipPath && introStyle === 'overlap'
@@ -347,7 +345,7 @@ async function renderVideo(params, callbacks) {
     onProgress({ phase: 'done', percent: 100 });
     const stat = fs.statSync(outputPath);
     onLog(`\n✅ Optimized export complete in ${formatElapsed((Date.now() - renderStartedAt) / 1000)}`);
-    onLog(`📦 Output: ${formatBytes(stat.size)} | ${OUTPUT_SIZE} | timestamped VFR | ${preparedAudio.description}`);
+    onLog(`📦 Output: ${formatBytes(stat.size)} | ${OUTPUT_SIZE} | constant ${OUTPUT_FPS}fps | ${preparedAudio.description}`);
 
   } catch (error) {
     abortRequested = true;
@@ -520,7 +518,7 @@ async function encodeVisualTimeline({
       '-f', 'concat', '-safe', '0', '-i', manifestPath,
       '-t', expectedDuration.toFixed(6),
       ...videoEncodeArgs({ useGPU, codec, crf, stillTimeline: true }),
-      '-fps_mode:v', 'vfr',
+      '-r', String(OUTPUT_FPS), '-fps_mode:v', 'cfr',
       '-video_track_timescale', String(VIDEO_TRACK_TIMESCALE),
       '-an', '-movflags', '+faststart', '-y', outputPath
     ],
@@ -582,7 +580,9 @@ function videoEncodeArgs({ useGPU, codec, crf, stillTimeline = false }) {
     return [
       '-c:v', codec === 'h265' ? 'hevc_nvenc' : 'h264_nvenc',
       '-preset', 'p4', '-tune', 'hq', '-rc', 'vbr', '-cq', String(crf),
-      '-pix_fmt', 'yuv420p', '-g', '60', '-bf', '0',
+      // A 10-second GOP and B-frames keep long, motionless chapter cards
+      // compact without sacrificing standard-player compatibility.
+      '-pix_fmt', 'yuv420p', '-g', String(OUTPUT_FPS * 10), '-bf', codec === 'h265' ? '0' : '3',
       ...(codec === 'h265' ? ['-tag:v', 'hvc1'] : [])
     ];
   }
@@ -590,7 +590,7 @@ function videoEncodeArgs({ useGPU, codec, crf, stillTimeline = false }) {
     '-c:v', codec === 'h265' ? 'libx265' : 'libx264',
     '-preset', 'fast',
     ...(stillTimeline && codec === 'h264' ? ['-tune', 'stillimage'] : []),
-    '-crf', String(crf), '-pix_fmt', 'yuv420p', '-g', '60', '-bf', '0',
+    '-crf', String(crf), '-pix_fmt', 'yuv420p', '-g', String(OUTPUT_FPS * 10), '-bf', '3',
     ...(codec === 'h265' ? ['-tag:v', 'hvc1'] : [])
   ];
 }

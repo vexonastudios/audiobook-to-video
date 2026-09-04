@@ -109,8 +109,9 @@ async function main() {
       '-v', 'error', '-count_frames', '-select_streams', 'v:0',
       '-show_entries', 'stream=nb_read_frames', '-of', 'default=nw=1:nk=1', outputPath
     ]).trim());
-    if (frameCount < totalDuration - 2) {
-      throw new Error(`Expected periodic hold samples, but only found ${frameCount} video frames.`);
+    const expectedFrameCount = totalDuration * 30;
+    if (Math.abs(frameCount - expectedFrameCount) > 2) {
+      throw new Error(`Expected a genuine constant-30fps stream with about ${expectedFrameCount} frames, but found ${frameCount}.`);
     }
 
     console.log(`Timeline seek smoke test passed: ${checkpoints.length} seeks, ${frameCount} frames`);

@@ -1,4 +1,6 @@
 const OPENING_TITLE_SECONDS_PER_CARD = 3;
+const OPENING_TITLE_SECONDS = 5;
+const OPENING_TITLE_WITH_SUBTITLE_SECONDS = 7;
 const OPENING_TITLE_MIN_SECONDS_PER_CARD = 1.5;
 const OPENING_TITLE_FADE_SECONDS = 0.65;
 
@@ -51,43 +53,77 @@ function buildOpeningTitleCards(fields = {}) {
     });
   }
   if (values.site) {
-    cards.push({ type: 'site', label: 'DISCOVER MORE AT', primary: values.site, secondary: '' });
+    cards.push({ type: 'site', label: 'DISCOVER MORE AT', primary: values.site.toUpperCase(), secondary: '' });
   }
 
   return cards;
+}
+
+function preferredCardDuration(card) {
+  if (card.type === 'title') {
+    return card.secondary ? OPENING_TITLE_WITH_SUBTITLE_SECONDS : OPENING_TITLE_SECONDS;
+  }
+  return OPENING_TITLE_SECONDS_PER_CARD;
+}
+
+// Allocate whole frames, keeping a minimum reading interval for every card and
+// giving the title the extra time when the first chapter has room for it.
+function resolveCardTimings(cards, frameCount, fps) {
+  const minimumFrames = Math.min(
+    Math.ceil(OPENING_TITLE_MIN_SECONDS_PER_CARD * fps),
+    Math.floor(frameCount / cards.length)
+  );
+  const extraFrames = frameCount - minimumFrames * cards.length;
+  const weights = cards.map(card => preferredCardDuration(card) - OPENING_TITLE_MIN_SECONDS_PER_CARD);
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+  const extras = weights.map(weight => extraFrames * weight / totalWeight);
+  const counts = extras.map(extra => minimumFrames + Math.floor(extra));
+  const remainder = frameCount - counts.reduce((sum, count) => sum + count, 0);
+  const remainderOrder = extras.map((extra, index) => ({ index, fraction: extra - Math.floor(extra) }))
+    .sort((a, b) => b.fraction - a.fraction || a.index - b.index);
+  for (let i = 0; i < remainder; i++) counts[remainderOrder[i].index]++;
+
+  let cursor = 0;
+  return counts.map(count => {
+    const startFrame = cursor;
+    cursor += count;
+    return { start: startFrame / fps, duration: count / fps, end: cursor / fps };
+  });
 }
 
 function resolveOpeningTitleSequence(fields, maxDuration = Infinity, fps = 30) {
   const cards = buildOpeningTitleCards(fields);
   if (cards.length === 0 || Number.isNaN(maxDuration) || maxDuration <= 0) return null;
 
-  const idealDuration = cards.length * OPENING_TITLE_SECONDS_PER_CARD;
+  const idealDuration = cards.reduce((sum, card) => sum + preferredCardDuration(card), 0);
   const duration = Math.min(idealDuration, maxDuration);
   if (duration < cards.length * OPENING_TITLE_MIN_SECONDS_PER_CARD) return null;
 
   const frameCount = Math.max(2, Math.floor(duration * fps + 1e-6));
   const snappedDuration = frameCount / fps;
-  const cardDuration = snappedDuration / cards.length;
+  const cardTimings = resolveCardTimings(cards, frameCount, fps);
   return {
     cards,
     frameCount,
     duration: snappedDuration,
-    cardDuration,
-    fadeDuration: Math.min(OPENING_TITLE_FADE_SECONDS, cardDuration * 0.28),
+    cardTimings,
+    fadeDuration: Math.min(OPENING_TITLE_FADE_SECONDS, ...cardTimings.map(card => card.duration * 0.28)),
     fps
   };
 }
 
-function resolveOpeningTitleFrame(cards, time, duration) {
+function resolveOpeningTitleFrame(cards, time, duration, fps = 30) {
   if (!Array.isArray(cards) || cards.length === 0 || duration <= 0) {
     return { fromCard: null, toCard: null, mix: 0, toChapter: true };
   }
 
-  const cardDuration = duration / cards.length;
-  const fadeDuration = Math.min(OPENING_TITLE_FADE_SECONDS, cardDuration * 0.28);
+  const cardTimings = resolveCardTimings(cards, Math.max(1, Math.round(duration * fps)), fps);
+  const fadeDuration = Math.min(OPENING_TITLE_FADE_SECONDS, ...cardTimings.map(card => card.duration * 0.28));
   const safeTime = Math.max(0, Math.min(duration - Number.EPSILON, time));
-  const index = Math.min(cards.length - 1, Math.floor(safeTime / cardDuration));
-  const localTime = safeTime - index * cardDuration;
+  const matchedIndex = cardTimings.findIndex(card => safeTime < card.end);
+  const index = matchedIndex < 0 ? cards.length - 1 : matchedIndex;
+  const cardDuration = cardTimings[index].duration;
+  const localTime = safeTime - cardTimings[index].start;
 
   if (index === 0 && localTime < fadeDuration) {
     return {

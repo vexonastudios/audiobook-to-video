@@ -742,7 +742,7 @@ function getOpeningTitleCards() {
     });
   }
   if (site) {
-    cards.push({ type: 'site', label: 'DISCOVER MORE AT', primary: site, secondary: '' });
+    cards.push({ type: 'site', label: 'DISCOVER MORE AT', primary: site.toUpperCase(), secondary: '' });
   }
   return cards;
 }

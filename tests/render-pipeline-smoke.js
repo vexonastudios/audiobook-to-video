@@ -26,7 +26,8 @@ async function runScenario({
   name, root, stillPath, wavPath, introPath, introStyle, expectedDuration,
   transitionStyle, codec = 'h264', expectedAudioCodec = 'aac',
   openingTitlesEnabled = false, openingTitles = null,
-  chapterSplit = 3, expectedOpeningStills = 2
+  chapterSplit = 3, expectedOpeningStills = 2, totalDuration = 6,
+  openingFixtures = null, checkpoints = []
 }) {
   const outputPath = path.join(root, `${name}.mp4`);
   let openingFramesRendered = 0;
@@ -36,7 +37,7 @@ async function runScenario({
     outputPath,
     chapters: [
       { startTime: 0, endTime: chapterSplit, number: 1, title: 'One', isNumbered: true },
-      { startTime: chapterSplit, endTime: 6, number: 2, title: 'Two', isNumbered: true }
+      { startTime: chapterSplit, endTime: totalDuration, number: 2, title: 'Two', isNumbered: true }
     ],
     blurAmount: 10,
     bgOpacity: 0.6,
@@ -57,10 +58,11 @@ async function runScenario({
     onLog: () => {},
     prepareFrameRenderer: async () => true,
     renderFrameToFile: async (_, targetPath) => fs.copyFileSync(stillPath, targetPath),
-    renderOpeningFrameToFile: async (_, targetPath) => {
+    renderOpeningFrameToFile: async (params, targetPath) => {
       openingFramesRendered++;
-      try { fs.linkSync(stillPath, targetPath); }
-      catch (_) { fs.copyFileSync(stillPath, targetPath); }
+      const sourcePath = openingFixtures?.[params.openingPreviewCard?.type] || stillPath;
+      try { fs.linkSync(sourcePath, targetPath); }
+      catch (_) { fs.copyFileSync(sourcePath, targetPath); }
     },
     renderTransitionFrameToFile: async (_, targetPath) => fs.copyFileSync(stillPath, targetPath),
     renderPromotionFrameToFile: async (_, targetPath) => fs.copyFileSync(stillPath, targetPath),
@@ -102,6 +104,14 @@ async function runScenario({
     '-hide_banner', '-loglevel', 'error', '-ss', String(expectedDuration * 0.75),
     '-i', outputPath, '-frames:v', '1', '-f', 'null', nullOutput
   ]);
+  for (const { time, color } of checkpoints) {
+    const samplePath = path.join(root, `${name}-at-${time}.png`);
+    run(ffmpegPath, ['-v', 'error', '-ss', String(time), '-i', outputPath, '-frames:v', '1', '-y', samplePath]);
+    const pixel = await sharp(samplePath).extract({ left: 960, top: 540, width: 1, height: 1 }).removeAlpha().raw().toBuffer();
+    if (color.some((value, index) => Math.abs(value - pixel[index]) > 8)) {
+      throw new Error(`${name}: wrong opening card at ${time}s: ${Array.from(pixel)}; expected ${color}`);
+    }
+  }
   return { name, duration, frames: frameCount, openingFramesRendered };
 }
 
@@ -173,6 +183,32 @@ async function main() {
       chapterSplit: 4.8,
       expectedOpeningStills: 4
     }));
+
+    // Different colors catch timing errors that identical still fixtures hide.
+    const openingFixtures = {};
+    for (const [type, color] of Object.entries({ title: '#dc1414', author: '#14b414', site: '#1414dc' })) {
+      openingFixtures[type] = path.join(root, `opening-${type}.png`);
+      await sharp({ create: { width: 1920, height: 1080, channels: 3, background: color } }).png().toFile(openingFixtures[type]);
+    }
+    const longerAudioPath = path.join(root, 'opening-audio.m4a');
+    run(ffmpegPath, ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=44100:duration=18', '-c:a', 'aac', '-y', longerAudioPath]);
+    for (const overlap of [false, true]) {
+      const lead = overlap ? 1 : 0;
+      results.push(await runScenario({
+        name: overlap ? 'readable-opening-overlap' : 'readable-opening',
+        root, stillPath, wavPath: longerAudioPath, introPath,
+        introStyle: overlap ? 'overlap' : null, expectedDuration: 18 + lead,
+        totalDuration: 18, chapterSplit: 16, transitionStyle: 'cut',
+        openingTitlesEnabled: true, expectedOpeningStills: 4,
+        openingTitles: { title: 'A Book Title', subtitle: 'A Subtitle to Read', author: 'An Author', site: 'scrollreader.com' },
+        openingFixtures,
+        checkpoints: [
+          { time: 6 + lead, color: [220, 20, 20] },
+          { time: 7.8 + lead, color: [20, 180, 20] },
+          { time: 10.8 + lead, color: [20, 20, 220] }
+        ]
+      }));
+    }
 
     let cancellationObserved = false;
     try {

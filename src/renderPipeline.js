@@ -620,12 +620,12 @@ async function encodeOpeningTitleSequenceVideo({
     throw new Error('Opening title card images do not match the resolved sequence.');
   }
 
-  const { cardDuration, fadeDuration, duration } = sequence;
+  const { cardTimings, fadeDuration, duration } = sequence;
   const imageInputs = [
     { path: blankPath, duration: fadeDuration },
     ...cardPaths.map((imagePath, index) => ({
       path: imagePath,
-      duration: index === cardPaths.length - 1 ? cardDuration : cardDuration + fadeDuration
+      duration: cardTimings[index].duration + (index === cardPaths.length - 1 ? 0 : fadeDuration)
     })),
     { path: chapterPath, duration: fadeDuration }
   ];
@@ -641,7 +641,7 @@ async function encodeOpeningTitleSequenceVideo({
   let currentLabel = 'v0';
   for (let index = 0; index < cardPaths.length; index++) {
     const outputLabel = `opening_xfade_${index}`;
-    const offset = index === 0 ? 0 : index * cardDuration;
+    const offset = cardTimings[index].start;
     filters.push(
       `[${currentLabel}][v${index + 1}]xfade=transition=fade:` +
       `duration=${fadeDuration.toFixed(6)}:offset=${offset.toFixed(6)}[${outputLabel}]`

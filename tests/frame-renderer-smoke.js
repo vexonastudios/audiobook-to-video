@@ -19,6 +19,7 @@ async function run() {
   const openingTitlePath = path.join(outputDir, 'opening-title.png');
   const openingSeriesPath = path.join(outputDir, 'opening-series.png');
   const openingAuthorPath = path.join(outputDir, 'opening-author.png');
+  const openingSitePath = path.join(outputDir, 'opening-site.png');
   const transitionPaths = ['fade', 'dissolve', 'flare', 'zoom'].map(style => ({
     style,
     path: path.join(outputDir, `transition-${style}.png`)
@@ -76,11 +77,11 @@ async function run() {
         openingBlank: true
       })}, ${JSON.stringify(openingBlankPath)})`
     );
-    for (const [targetPath, time] of [[openingTitlePath, 1], [openingSeriesPath, 4], [openingAuthorPath, 7]]) {
+    for (const [targetPath, time] of [[openingTitlePath, 6], [openingSeriesPath, 8], [openingAuthorPath, 11], [openingSitePath, 17]]) {
       await window.webContents.executeJavaScript(
         `window.renderOpeningFrameToFile(${JSON.stringify({
           chapter: { number: null, title: 'Introduction', isNumbered: false },
-          openingSequenceFrame: { cards: openingCards, time, duration: 15 }
+          openingSequenceFrame: { cards: openingCards, time, duration: 19 }
         })}, ${JSON.stringify(targetPath)})`
       );
     }
@@ -111,6 +112,7 @@ async function run() {
       openingTitlePath,
       openingSeriesPath,
       openingAuthorPath,
+      openingSitePath,
       promotionPath,
       promotionOverlayPath,
       ...transitionPaths.map(item => item.path)
@@ -132,6 +134,44 @@ async function run() {
     }
     if (fs.readFileSync(openingTitlePath).equals(fs.readFileSync(openingSeriesPath))) {
       throw new Error('Series card did not differ from the title card.');
+    }
+    // Tracked typography must produce the same pixels regardless of the
+    // caller's alignment; this catches the false gaps around narrow glyphs.
+    const typography = await window.webContents.executeJavaScript(`(() => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1200; canvas.height = 200;
+      const ctx = canvas.getContext('2d');
+      ctx.font = '500 34px "EB Garamond"';
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      drawTracked(ctx, 'AUDIOBOOK PRESENTATION', 600, 100, 3.5);
+      const left = canvas.toDataURL();
+      ctx.clearRect(0, 0, 1200, 200);
+      ctx.textAlign = 'center';
+      drawTracked(ctx, 'AUDIOBOOK PRESENTATION', 600, 100, 3.5);
+      return { matches: left === canvas.toDataURL(), alignment: ctx.textAlign };
+    })()`);
+    if (!typography.matches || typography.alignment !== 'center') {
+      throw new Error('Tracked text inherited per-letter center alignment or changed the caller state.');
+    }
+
+    // Inspect the draw calls as well as the exported bitmap: old saved projects
+    // and direct previews may still supply a lowercase site card.
+    const siteTypography = await window.webContents.executeJavaScript(`(() => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1920; canvas.height = 1080;
+      const ctx = canvas.getContext('2d');
+      const calls = [];
+      const original = ctx.fillText.bind(ctx);
+      ctx.fillText = (text, x, y) => { calls.push({ text, x, y, width: ctx.measureText(text).width }); original(text, x, y); };
+      drawOpeningTitleCard(ctx, { type: 'site', label: 'DISCOVER MORE AT', primary: 'scrollreader.com', secondary: '' }, {});
+      const site = calls.filter(call => call.y === 383);
+      const left = site[0].x;
+      const right = site[site.length - 1].x + site[site.length - 1].width;
+      return { text: site.map(call => call.text).join(''), gap: site[1].x - site[0].x - site[0].width, center: (left + right) / 2, width: right - left };
+    })()`);
+    if (siteTypography.text !== 'SCROLLREADER.COM' || siteTypography.gap < 2 || Math.abs(siteTypography.center - 880) > 0.01 || siteTypography.width > 666.01) {
+      throw new Error('Website typography was not uppercase, evenly tracked, centered, and fitted: ' + JSON.stringify(siteTypography));
     }
     if (fs.readFileSync(openingTitlePath).equals(fs.readFileSync(chapterOnePath))) {
       throw new Error('Opening title card did not differ from a chapter frame.');

@@ -24,7 +24,7 @@ Example Format:
 ## 4. Adjust Styles & Preview (Center Panel)
 - Use the sliders on the left to adjust background blur and opacity.
 - Pick a **Transition Style** (like Fade, Cross Dissolve, or Zoom Blur) and set its duration. 
-- Enable **Opening Title Sequence** to rotate the book title/subtitle, optional series and book number, author, original publication, and site through the right-side title area at the start. The small heading above the title is editable. Each completed card lasts about three seconds; the cover remains fixed and chapter/audio timing does not change. The app renders each card once and lets FFmpeg animate the crossfades efficiently.
+- Enable **Opening Title Sequence** to rotate the book title/subtitle, optional series and book number, author, original publication, and site through the right-side title area at the start. The small heading above the title is editable. The title lasts seven seconds with a subtitle or five seconds without one; other cards last about three seconds. Short opening chapters shorten the sequence to fit. Site addresses display in uppercase with wider letter spacing. The cover remains fixed and chapter/audio timing does not change. The app renders each card once and lets FFmpeg animate the crossfades efficiently.
 - Use the **Preview** section's dropdown above the canvas to inspect every opening card and chapter layout.
 
 ## 5. Render Video

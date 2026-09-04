@@ -16,6 +16,7 @@ async function run() {
   const promotionPath = path.join(outputDir, 'print-promotion.png');
   const promotionOverlayPath = path.join(outputDir, 'print-promotion-overlay.png');
   const openingTitlePath = path.join(outputDir, 'opening-title.png');
+  const openingSeriesPath = path.join(outputDir, 'opening-series.png');
   const openingAuthorPath = path.join(outputDir, 'opening-author.png');
   const transitionPaths = ['fade', 'dissolve', 'flare', 'zoom'].map(style => ({
     style,
@@ -62,16 +63,17 @@ async function run() {
       })}, ${JSON.stringify(chapterTwoPath)})`
     );
     const openingCards = [
-      { type: 'title', label: 'AUDIOBOOK PRESENTATION', primary: 'A Remarkable Story', secondary: 'The Complete Account' },
+      { type: 'title', label: 'A SCROLL READER ORIGINAL PRESENTATION', primary: 'A Remarkable Story', secondary: 'The Complete Account' },
+      { type: 'series', label: 'BOOK 2 IN THE SERIES', primary: 'The Heritage Library', secondary: '' },
       { type: 'author', label: 'WRITTEN BY', primary: 'Helen S. Dyer', secondary: '' },
       { type: 'published', label: 'ORIGINALLY PUBLISHED', primary: '1910', secondary: '' },
       { type: 'site', label: 'DISCOVER MORE AT', primary: 'scrollreader.com', secondary: '' }
     ];
-    for (const [targetPath, time] of [[openingTitlePath, 1], [openingAuthorPath, 4]]) {
+    for (const [targetPath, time] of [[openingTitlePath, 1], [openingSeriesPath, 4], [openingAuthorPath, 7]]) {
       await window.webContents.executeJavaScript(
         `window.renderOpeningFrameToFile(${JSON.stringify({
           chapter: { number: null, title: 'Introduction', isNumbered: false },
-          openingSequenceFrame: { cards: openingCards, time, duration: 12 }
+          openingSequenceFrame: { cards: openingCards, time, duration: 15 }
         })}, ${JSON.stringify(targetPath)})`
       );
     }
@@ -99,6 +101,7 @@ async function run() {
       chapterOnePath,
       chapterTwoPath,
       openingTitlePath,
+      openingSeriesPath,
       openingAuthorPath,
       promotionPath,
       promotionOverlayPath,
@@ -118,6 +121,9 @@ async function run() {
     }
     if (fs.readFileSync(openingTitlePath).equals(fs.readFileSync(openingAuthorPath))) {
       throw new Error('Distinct opening title cards produced identical PNG files.');
+    }
+    if (fs.readFileSync(openingTitlePath).equals(fs.readFileSync(openingSeriesPath))) {
+      throw new Error('Series card did not differ from the title card.');
     }
     if (fs.readFileSync(openingTitlePath).equals(fs.readFileSync(chapterOnePath))) {
       throw new Error('Opening title card did not differ from a chapter frame.');

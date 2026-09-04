@@ -249,10 +249,21 @@ html, body {
   font-weight: 500;
 }
 
+.metadata-field span em {
+  color: var(--text-muted);
+  font-size: 9.5px;
+  font-style: normal;
+  font-weight: 400;
+}
+
 .metadata-field-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
+}
+
+.metadata-field-grid-series {
+  grid-template-columns: minmax(0, 1fr) 88px;
 }
 
 .metadata-input {

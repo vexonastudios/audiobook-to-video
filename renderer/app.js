@@ -58,8 +58,11 @@ const state = {
   printPromoEnabled: true,
   openingTitlesEnabled: false,
   openingTitles: {
+    presentationLabel: 'AUDIOBOOK PRESENTATION',
     title: '',
     subtitle: '',
+    seriesName: '',
+    bookNumber: '',
     author: '',
     originallyPublished: '',
     site: 'scrollreader.com'
@@ -132,6 +135,9 @@ const els = {
   openingTitlesSettings: $('opening-titles-settings'),
   openingTitleInput: $('opening-title-input'),
   openingSubtitleInput: $('opening-subtitle-input'),
+  openingPresentationLabelInput: $('opening-presentation-label-input'),
+  openingSeriesNameInput: $('opening-series-name-input'),
+  openingBookNumberInput: $('opening-book-number-input'),
   openingAuthorInput: $('opening-author-input'),
   openingPublishedInput: $('opening-published-input'),
   openingSiteInput: $('opening-site-input'),
@@ -274,8 +280,11 @@ els.btnNewProject.addEventListener('click', () => {
       printPromoEnabled: true,
       openingTitlesEnabled: false,
       openingTitles: {
+        presentationLabel: 'AUDIOBOOK PRESENTATION',
         title: '',
         subtitle: '',
+        seriesName: '',
+        bookNumber: '',
         author: '',
         originallyPublished: '',
         site: 'scrollreader.com'
@@ -330,8 +339,11 @@ els.btnNewProject.addEventListener('click', () => {
     els.printPromoToggle.checked = true;
     els.openingTitlesToggle.checked = false;
     els.openingTitlesSettings.style.display = 'none';
+    els.openingPresentationLabelInput.value = 'AUDIOBOOK PRESENTATION';
     els.openingTitleInput.value = '';
     els.openingSubtitleInput.value = '';
+    els.openingSeriesNameInput.value = '';
+    els.openingBookNumberInput.value = '';
     els.openingAuthorInput.value = '';
     els.openingPublishedInput.value = '';
     els.openingSiteInput.value = 'scrollreader.com';
@@ -687,8 +699,11 @@ els.btnOutput.addEventListener('click', async () => {
 
 function getOpeningTitleCards() {
   const values = state.openingTitles;
+  const presentationLabel = String(values.presentationLabel || '').trim() || 'AUDIOBOOK PRESENTATION';
   const title = String(values.title || '').trim();
   const subtitle = String(values.subtitle || '').trim();
+  const seriesName = String(values.seriesName || '').trim();
+  const bookNumber = String(values.bookNumber || '').trim();
   const author = String(values.author || '').trim();
   const originallyPublished = String(values.originallyPublished || '').trim();
   const site = String(values.site || '').trim();
@@ -696,9 +711,17 @@ function getOpeningTitleCards() {
   if (title || subtitle) {
     cards.push({
       type: 'title',
-      label: 'AUDIOBOOK PRESENTATION',
+      label: presentationLabel,
       primary: title || subtitle,
       secondary: title ? subtitle : ''
+    });
+  }
+  if (seriesName) {
+    cards.push({
+      type: 'series',
+      label: bookNumber ? `BOOK ${bookNumber} IN THE SERIES` : 'FROM THE SERIES',
+      primary: seriesName,
+      secondary: ''
     });
   }
   if (author) {
@@ -720,8 +743,11 @@ function getOpeningTitleCards() {
 
 function syncOpeningTitlesFromInputs() {
   state.openingTitles = {
+    presentationLabel: els.openingPresentationLabelInput.value,
     title: els.openingTitleInput.value,
     subtitle: els.openingSubtitleInput.value,
+    seriesName: els.openingSeriesNameInput.value,
+    bookNumber: els.openingBookNumberInput.value,
     author: els.openingAuthorInput.value,
     originallyPublished: els.openingPublishedInput.value,
     site: els.openingSiteInput.value
@@ -743,8 +769,11 @@ els.openingTitlesToggle.addEventListener('change', () => {
 });
 
 for (const input of [
+  els.openingPresentationLabelInput,
   els.openingTitleInput,
   els.openingSubtitleInput,
+  els.openingSeriesNameInput,
+  els.openingBookNumberInput,
   els.openingAuthorInput,
   els.openingPublishedInput,
   els.openingSiteInput
@@ -1942,8 +1971,11 @@ async function restoreSession() {
       els.printPromoToggle.checked = state.printPromoEnabled;
       state.openingTitlesEnabled = d0.openingTitlesEnabled === true;
       state.openingTitles = {
+        presentationLabel: 'AUDIOBOOK PRESENTATION',
         title: '',
         subtitle: '',
+        seriesName: '',
+        bookNumber: '',
         author: '',
         originallyPublished: '',
         site: 'scrollreader.com',
@@ -1951,8 +1983,11 @@ async function restoreSession() {
       };
       els.openingTitlesToggle.checked = state.openingTitlesEnabled;
       els.openingTitlesSettings.style.display = state.openingTitlesEnabled ? 'flex' : 'none';
+      els.openingPresentationLabelInput.value = state.openingTitles.presentationLabel;
       els.openingTitleInput.value = state.openingTitles.title;
       els.openingSubtitleInput.value = state.openingTitles.subtitle;
+      els.openingSeriesNameInput.value = state.openingTitles.seriesName;
+      els.openingBookNumberInput.value = state.openingTitles.bookNumber;
       els.openingAuthorInput.value = state.openingTitles.author;
       els.openingPublishedInput.value = state.openingTitles.originallyPublished;
       els.openingSiteInput.value = state.openingTitles.site;

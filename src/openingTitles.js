@@ -8,8 +8,11 @@ function clean(value) {
 
 function normalizeOpeningTitles(fields = {}) {
   return {
+    presentationLabel: clean(fields.presentationLabel) || 'AUDIOBOOK PRESENTATION',
     title: clean(fields.title),
     subtitle: clean(fields.subtitle),
+    seriesName: clean(fields.seriesName),
+    bookNumber: clean(fields.bookNumber),
     author: clean(fields.author),
     originallyPublished: clean(fields.originallyPublished),
     site: clean(fields.site)
@@ -23,9 +26,17 @@ function buildOpeningTitleCards(fields = {}) {
   if (values.title || values.subtitle) {
     cards.push({
       type: 'title',
-      label: 'AUDIOBOOK PRESENTATION',
+      label: values.presentationLabel,
       primary: values.title || values.subtitle,
       secondary: values.title ? values.subtitle : ''
+    });
+  }
+  if (values.seriesName) {
+    cards.push({
+      type: 'series',
+      label: values.bookNumber ? `BOOK ${values.bookNumber} IN THE SERIES` : 'FROM THE SERIES',
+      primary: values.seriesName,
+      secondary: ''
     });
   }
   if (values.author) {

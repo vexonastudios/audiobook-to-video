@@ -170,6 +170,23 @@
     });
   }
 
+  function drawTrackedToFit(ctx, text, centerX, y, maxWidth, maxFontSize = 17, minFontSize = 11) {
+    const value = String(text || '');
+    let fontSize = maxFontSize;
+    let tracking = 3.5;
+
+    while (fontSize > minFontSize) {
+      ctx.font = `500 ${fontSize}px "EB Garamond"`;
+      const glyphWidth = value.split('').reduce((total, char) => total + ctx.measureText(char).width, 0);
+      if (glyphWidth + tracking * Math.max(0, value.length - 1) <= maxWidth) break;
+      fontSize -= 1;
+      tracking = Math.max(1.4, tracking - 0.12);
+    }
+
+    ctx.font = `500 ${fontSize}px "EB Garamond"`;
+    drawTracked(ctx, value, centerX, y, tracking);
+  }
+
   // ─────────────────────────────────────────────────────────────
   // Draw a rounded rectangle
   // ─────────────────────────────────────────────────────────────
@@ -290,9 +307,8 @@
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
 
-    ctx.font = '500 17px "EB Garamond"';
     ctx.fillStyle = accentCSS;
-    drawTracked(ctx, card.label, centerX, 245, 3.5);
+    drawTrackedToFit(ctx, card.label, centerX, 245, textAreaW - 80);
 
     const lineY = 277;
     const lineW = 136;

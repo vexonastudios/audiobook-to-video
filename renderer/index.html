@@ -176,6 +176,20 @@
             <input id="opening-subtitle-input" class="metadata-input" type="text" maxlength="180" placeholder="Optional subtitle" autocomplete="off">
           </label>
           <label class="metadata-field">
+            <span>Title heading</span>
+            <input id="opening-presentation-label-input" class="metadata-input" type="text" maxlength="60" value="AUDIOBOOK PRESENTATION" autocomplete="off">
+          </label>
+          <div class="metadata-field-grid metadata-field-grid-series">
+            <label class="metadata-field">
+              <span>Series name <em>optional</em></span>
+              <input id="opening-series-name-input" class="metadata-input" type="text" maxlength="140" placeholder="Series title" autocomplete="off">
+            </label>
+            <label class="metadata-field metadata-field-book-number">
+              <span>Book number</span>
+              <input id="opening-book-number-input" class="metadata-input" type="text" maxlength="20" placeholder="e.g. 2" autocomplete="off">
+            </label>
+          </div>
+          <label class="metadata-field">
             <span>Author</span>
             <input id="opening-author-input" class="metadata-input" type="text" maxlength="100" placeholder="Author name" autocomplete="off">
           </label>
@@ -189,7 +203,7 @@
               <input id="opening-site-input" class="metadata-input" type="text" maxlength="100" value="scrollreader.com" autocomplete="off">
             </label>
           </div>
-          <p class="metadata-help">Completed details rotate in the right-side title area for about 3 seconds each, then dissolve into the first chapter. Audio and chapter times do not move.</p>
+          <p class="metadata-help">Completed details rotate in the right-side title area for about 3 seconds each. Series details add a card such as “BOOK 2 IN THE SERIES.” Audio and chapter times do not move.</p>
         </div>
       </div>
 
@@ -509,7 +523,7 @@
         <p>Use the sliders on the left to adjust background blur and opacity. You can also pick a <strong>Transition Style</strong> (like Fade, Cross Dissolve, or Zoom Blur) and set its duration. Use the <strong>Preview</strong> section's dropdown to see exactly what each chapter will look like.</p>
 
         <h3>5. Render Video</h3>
-        <p>Enable <strong>Opening Title Sequence</strong> to rotate the book title, subtitle, author, original publication, and site through the right-side title area before the first chapter appears. The cover stays fixed and audio/chapter timing does not move. Once your fields are filled and chapters are parsed, click <strong>Render Video</strong>. The optimized renderer builds a compatible constant-30fps stream and uses your <strong>NVIDIA RTX GPU (NVENC)</strong> when available. When <strong>Print Edition Promotion</strong> is enabled, a lower-third card appears 30 seconds into the audiobook. Choose <strong>H.264</strong> for max compatibility or <strong>H.265 HEVC</strong> for ~40% smaller file sizes.</p>
+        <p>Enable <strong>Opening Title Sequence</strong> to rotate the book title, subtitle, optional series and book number, author, original publication, and site through the right-side title area before the first chapter appears. You can customize the small heading above the title. The cover stays fixed and audio/chapter timing does not move. Once your fields are filled and chapters are parsed, click <strong>Render Video</strong>. The optimized renderer builds a compatible constant-30fps stream and uses your <strong>NVIDIA RTX GPU (NVENC)</strong> when available. When <strong>Print Edition Promotion</strong> is enabled, a lower-third card appears 30 seconds into the audiobook. Choose <strong>H.264</strong> for max compatibility or <strong>H.265 HEVC</strong> for ~40% smaller file sizes.</p>
       </div>
     </div>
   </div>

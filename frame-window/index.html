@@ -50,6 +50,10 @@
   const FRAME_HEIGHT = 1080;
   const RENDER_SCALE = FRAME_WIDTH / LOGICAL_WIDTH;
   const { resolveOpeningTitleFrame } = require('../src/openingTitles');
+  const renderFontsReady = Promise.all([
+    '400 72px "EB Garamond"', '500 72px "EB Garamond"',
+    '700 72px "EB Garamond"', 'italic 400 35px "EB Garamond"'
+  ].map(font => document.fonts.load(font)));
   let renderBaseParams = {};
 
   function configureRenderContext(ctx) {
@@ -155,39 +159,36 @@
   }
 
   /**
-   * Draw centered tracked-uppercase text character-by-character (for "CHAPTER N" label)
+   * Shape the whole line so the font's kerning survives letter spacing.
    */
   function drawTracked(ctx, text, centerX, y, tracking) {
-    const chars = Array.from(text);
-    let totalW = 0;
-    const widths = chars.map(c => { const w = ctx.measureText(c).width; totalW += w; return w; });
-    totalW += tracking * Math.max(0, chars.length - 1);
-
-    // Glyph positions below are left edges, regardless of the caller's alignment.
-    // Center-aligning each glyph creates false gaps next to narrow letters like I.
     ctx.save();
-    ctx.textAlign = 'left';
-    let x = centerX - totalW / 2;
-    chars.forEach((c, i) => {
-      ctx.fillText(c, x, y);
-      x += widths[i] + tracking;
-    });
+    ctx.textAlign = 'center';
+    ctx.fontKerning = 'normal';
+    ctx.letterSpacing = `${tracking}px`;
+    const metrics = ctx.measureText(text);
+    const opticalOffset = (metrics.actualBoundingBoxLeft - metrics.actualBoundingBoxRight) / 2;
+    ctx.fillText(text, centerX + opticalOffset, y);
     ctx.restore();
   }
 
-  function drawTrackedToFit(ctx, text, centerX, y, maxWidth, maxFontSize = 17, minFontSize = 11, maxTracking = 3.5) {
+  function drawTrackedToFit(ctx, text, centerX, y, maxWidth, maxFontSize = 17, minFontSize = 11, maxTracking = 1.5) {
+    ctx.save();
     const value = String(text || '');
-    const chars = Array.from(value);
+    ctx.fontKerning = 'normal';
     let fontSize = maxFontSize;
     let tracking = maxTracking;
-    const measureWidth = () => chars.reduce((total, char) => total + ctx.measureText(char).width, 0)
-      + tracking * Math.max(0, chars.length - 1);
+    const measureWidth = () => {
+      ctx.letterSpacing = `${tracking}px`;
+      const metrics = ctx.measureText(value);
+      return Math.max(metrics.width, metrics.actualBoundingBoxLeft + metrics.actualBoundingBoxRight);
+    };
 
     while (fontSize > minFontSize) {
       ctx.font = `500 ${fontSize}px "EB Garamond"`;
       if (measureWidth() <= maxWidth) break;
       fontSize -= 1;
-      tracking = Math.max(1.4, tracking - 0.12);
+      tracking = Math.max(0.5, tracking - 0.12);
     }
 
     ctx.font = `500 ${fontSize}px "EB Garamond"`;
@@ -200,6 +201,7 @@
       ctx.font = `500 ${fontSize}px "EB Garamond"`;
     }
     drawTracked(ctx, value, centerX, y, tracking);
+    ctx.restore();
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -340,7 +342,7 @@
 
     if (card.type === 'site') {
       ctx.fillStyle = accentCSS;
-      drawTrackedToFit(ctx, card.primary.toUpperCase(), centerX, 383, textAreaW - 54, 52, 18, 4);
+      drawTrackedToFit(ctx, card.primary.toUpperCase(), centerX, 383, textAreaW - 160, 38, 18, 2.5);
       ctx.restore();
       return;
     }
@@ -357,6 +359,7 @@
     fitted.lines.forEach((line, index) => ctx.fillText(line, centerX, primaryY + index * lineH));
 
     if (card.secondary) {
+      ctx.globalAlpha *= card.secondaryOpacity ?? 1;
       const secondary = fitText(ctx, card.secondary, 'EB Garamond', 35, 23, textAreaW - 90, 115);
       ctx.font = `italic 400 ${secondary.fontSize}px "EB Garamond"`;
       ctx.fillStyle = `rgba(${ar},${ag},${ab},0.92)`;
@@ -379,15 +382,19 @@
 
     const sequence = params.openingSequenceFrame;
     const frame = resolveOpeningTitleFrame(sequence.cards, sequence.time, sequence.duration, sequence.fps || 30);
+    if (frame.fromCard?.stage === 'title-only' && frame.toCard?.stage === 'subtitle') {
+      drawOpeningTitleCard(ctx, { ...frame.toCard, secondaryOpacity: frame.mix }, params);
+      return;
+    }
     if (frame.fromCard) {
       const fromOpacity = frame.toCard || frame.toChapter ? 1 - frame.mix : 1;
-      drawOpeningTitleCard(ctx, frame.fromCard, params, fromOpacity, -10 * frame.mix);
+      drawOpeningTitleCard(ctx, frame.fromCard, params, fromOpacity);
     }
     if (frame.toCard) {
-      drawOpeningTitleCard(ctx, frame.toCard, params, frame.mix, 14 * (1 - frame.mix));
+      drawOpeningTitleCard(ctx, frame.toCard, params, frame.mix);
     }
     if (frame.toChapter) {
-      drawChapterText(ctx, params, frame.mix, 12 * (1 - frame.mix));
+      drawChapterText(ctx, params, frame.mix);
     }
   }
 
@@ -592,6 +599,7 @@
   // ─────────────────────────────────────────────────────────────
 
   window.renderFrame = async function(params) {
+    await renderFontsReady;
     const {
       blendAlpha = 0,
       nextChapter = null,
@@ -800,11 +808,7 @@
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, FRAME_WIDTH, FRAME_HEIGHT);
 
-    // Trigger font load
-    ctx.font = '72px "EB Garamond"';
-    ctx.fillStyle = 'transparent';
-    ctx.fillText('', 0, 0);
-    document.fonts.ready.then(() => console.log('[FrameWindow] Fonts ready'));
+    renderFontsReady.then(() => console.log('[FrameWindow] Fonts ready'), error => console.error('Font loading failed:', error));
   });
   </script>
 </body>

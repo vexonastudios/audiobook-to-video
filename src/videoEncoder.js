@@ -109,6 +109,9 @@ async function renderVideo(params, callbacks) {
   try {
     // ── 1. Detect GPU once ──────────────────────────────────────────
     const useGPU = await detectNvenc(onLog);
+    callbacks.onProfile?.({ encoder: useGPU
+      ? (codec === 'h265' ? 'hevc_nvenc' : 'h264_nvenc')
+      : (codec === 'h265' ? 'libx265' : 'libx264') });
     // RTX 5090 supports up to 8 concurrent NVENC sessions; CPU stays ≤ 3
     const parallelism = useGPU ? 8 : 3;
     if (useGPU) onLog(`🚀 Codec: ${codec === 'h265' ? 'H.265 HEVC NVENC' : 'H.264 NVENC'} | Parallelism: ${parallelism}`);
@@ -354,6 +357,7 @@ async function renderVideo(params, callbacks) {
     ]);
 
     const totalDuration = chapters[chapters.length - 1].endTime;
+    let finalDuration = totalDuration;
     let videoForMux = mergedVideoPath;
     if (printPromoEnabled) {
       if (!renderPromotionOverlayToFile) throw new Error('Print promotion renderer callback is unavailable.');
@@ -435,6 +439,7 @@ async function renderVideo(params, callbacks) {
 
       // We need the duration and audio info of the intro clip
       const introData = await getVideoDuration(introClipPath);
+      finalDuration = Number(introData.duration) + totalDuration - (introStyle === 'overlap' ? introFadeDuration : 0);
       const useAudio = introAudioEnabled && introData.hasAudio;
 
       const filterArgs = [];
@@ -615,6 +620,7 @@ async function renderVideo(params, callbacks) {
         : (codec === 'h265' ? 'CPU H.265 libx265' : 'CPU H.264 libx264');
       onLog(`📦 Output: ${mb > 1024 ? gb + ' GB' : mb + ' MB'} | ${OUTPUT_FPS}fps | ${codecLabel}`);
     } catch (_) {}
+    return { durationSeconds: finalDuration };
 
   } finally {
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) {}

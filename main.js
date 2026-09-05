@@ -1,7 +1,12 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
+const { RenderHistory } = require('./src/renderHistory');
+const { RenderJob } = require('./src/renderJob');
+const { createRenderNotifier } = require('./src/renderNotification');
+
+if (process.platform === 'win32') app.setAppUserModelId('com.vexonastudios.videogenerator');
 
 // Use the multi-resolution ICO for Windows window/taskbar rendering. Other
 // platforms use the high-resolution PNG generated from the same SVG source.
@@ -35,7 +40,8 @@ function createMainWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      webSecurity: true
+      webSecurity: true,
+      autoplayPolicy: 'no-user-gesture-required'
     }
   });
 
@@ -355,50 +361,50 @@ ipcMain.handle('render-preview', async (event, params) => {
 // IPC: Full Video Render
 // ─────────────────────────────────────────────
 
-let renderCancelled = false;
+let renderHistory = null;
+let renderJob = null;
 
-ipcMain.handle('cancel-render', () => {
-  renderCancelled = true;
+function sendRenderEvent(channel, data) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, data);
+}
+
+function getRenderHistory() {
+  if (!renderHistory) renderHistory = new RenderHistory(path.join(app.getPath('userData'), 'render-history.json'));
+  return renderHistory;
+}
+
+const notifyRenderComplete = createRenderNotifier({
+  Notification,
+  getWindow: () => mainWindow,
+  icon: appIconPath,
+  beep: () => shell.beep(),
+  onWarning: message => sendRenderEvent('render-log', `⚠ ${message}`)
 });
+
+ipcMain.handle('get-render-info', (_, params) => getRenderHistory().info(params || {}));
+ipcMain.handle('set-completion-sound', (_, enabled) => getRenderHistory().setSound(enabled));
+ipcMain.handle('preview-render-chime', () => sendRenderEvent('render-chime'));
+ipcMain.handle('render-chime-fallback', () => shell.beep());
+ipcMain.handle('cancel-render', () => renderJob?.cancel());
 
 ipcMain.handle('start-render', async (event, params) => {
   const { renderVideo } = require('./src/videoEncoder');
-  renderCancelled = false;
-
-  try {
-    await renderVideo({
-      ...params,
-      audioCacheDir: path.join(app.getPath('userData'), 'audio-cache')
-    }, {
-      onProgress: (data) => {
-        if (mainWindow) mainWindow.webContents.send('render-progress', data);
-      },
-      onLog: (msg) => {
-        if (mainWindow) mainWindow.webContents.send('render-log', msg);
-      },
-      renderFrame: renderFrameInWindow,
-      prepareFrameRenderer,
-      renderFrameToFile,
-      renderOpeningFrameToFile,
-      renderTransitionFrameToFile,
-      renderPromotionFrameToFile,
-      renderPromotionOverlayToFile,
-      isCancelled: () => renderCancelled
-    });
-    if (mainWindow) mainWindow.webContents.send('render-complete', {
-      success: true,
-      outputPath: params.outputPath
-    });
-  } catch (e) {
-    const cancelled = renderCancelled || e.message === 'RENDER_CANCELLED';
-    renderCancelled = false;
-    console.error('Render pipeline error:', e);
-    if (mainWindow) mainWindow.webContents.send('render-complete', {
-      success: false,
-      cancelled,
-      error: cancelled ? null : e.message
-    });
-  }
+  if (!renderJob) renderJob = new RenderJob({
+    history: getRenderHistory(), send: sendRenderEvent, notify: notifyRenderComplete
+  });
+  return renderJob.run({
+    ...params,
+    appVersion: app.getVersion(),
+    audioCacheDir: path.join(app.getPath('userData'), 'audio-cache')
+  }, renderVideo, {
+    renderFrame: renderFrameInWindow,
+    prepareFrameRenderer,
+    renderFrameToFile,
+    renderOpeningFrameToFile,
+    renderTransitionFrameToFile,
+    renderPromotionFrameToFile,
+    renderPromotionOverlayToFile
+  });
 });
 
 // ─────────────────────────────────────────────

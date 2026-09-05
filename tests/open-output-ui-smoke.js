@@ -7,6 +7,7 @@ async function runTest() {
   let openedPath = null;
 
   ipcMain.handle('get-gpu-name', () => 'Smoke Test GPU');
+  ipcMain.handle('get-render-info', () => ({ settings: { completionSound: true }, lastRender: null, estimatedSeconds: null }));
   ipcMain.handle('open-output-file', (event, filePath) => {
     openedPath = filePath;
     return { success: true };
@@ -48,6 +49,7 @@ async function runTest() {
   } finally {
     if (!window.isDestroyed()) window.destroy();
     ipcMain.removeHandler('get-gpu-name');
+    ipcMain.removeHandler('get-render-info');
     ipcMain.removeHandler('open-output-file');
   }
 }

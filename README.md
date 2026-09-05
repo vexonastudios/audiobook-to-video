@@ -21,6 +21,8 @@ Built on Electron and powered by FFmpeg, it features hardware-accelerated render
 - **Compatibility Mode:** The former segmented renderer remains available as an opt-in fallback.
 - **Export Options:** Choose between H.264 for maximum compatibility or H.265 (HEVC) for ~40% smaller file sizes.
 - **Open Completed Video:** Launch a successful export immediately in the system's default video player.
+- **Render Timing:** Save the last 50 successful render timings locally, estimate a comparable video's render time from its length, and update remaining time using measured progress checkpoints. The last render time remains visible after restarting.
+- **Completion Alerts:** Hear a three-note chime and see a desktop notification when an export succeeds. The sound preference is saved across projects; use **Test sound** to check it. Failed or cancelled renders do not play the success chime.
 
 ---
 

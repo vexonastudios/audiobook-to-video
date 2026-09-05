@@ -101,6 +101,9 @@ async function renderVideo(params, callbacks) {
 
   try {
     const useGPU = await detectNvenc(codec, onLog);
+    callbacks.onProfile?.({ encoder: useGPU
+      ? (codec === 'h265' ? 'hevc_nvenc' : 'h264_nvenc')
+      : (codec === 'h265' ? 'libx265' : 'libx264') });
     onLog(`\n🚀 Optimized timeline: ${OUTPUT_SIZE}, constant ${OUTPUT_FPS}fps, ${useGPU ? 'NVENC' : 'CPU'}`);
 
     const introData = introClipPath ? await probeMedia(introClipPath) : null;
@@ -451,6 +454,7 @@ async function renderVideo(params, callbacks) {
     const stat = fs.statSync(outputPath);
     onLog(`\n✅ Optimized export complete in ${formatElapsed((Date.now() - renderStartedAt) / 1000)}`);
     onLog(`📦 Output: ${formatBytes(stat.size)} | ${OUTPUT_SIZE} | constant ${OUTPUT_FPS}fps | ${preparedAudio.description}`);
+    return { durationSeconds: finalDuration };
 
   } catch (error) {
     abortRequested = true;

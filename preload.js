@@ -43,6 +43,12 @@ contextBridge.exposeInMainWorld('api', {
   // Rendering
   renderPreview: (params) => ipcRenderer.invoke('render-preview', params),
   startRender: (params) => ipcRenderer.invoke('start-render', params),
+  getRenderInfo: (params) => ipcRenderer.invoke('get-render-info', params),
+  setCompletionSound: (enabled) => ipcRenderer.invoke('set-completion-sound', enabled),
+  previewRenderChime: () => ipcRenderer.invoke('preview-render-chime'),
+  renderChimeFallback: () => ipcRenderer.invoke('render-chime-fallback'),
+  onRenderTiming: (cb) => ipcRenderer.on('render-timing', (_, data) => cb(data)),
+  onRenderChime: (cb) => ipcRenderer.on('render-chime', () => cb()),
 
   // Events from main process
   onRenderProgress: (cb) => ipcRenderer.on('render-progress', (_, data) => cb(data)),

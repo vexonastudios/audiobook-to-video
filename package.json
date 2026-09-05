@@ -1,12 +1,13 @@
 {
   "name": "audiobook-video-generator",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "description": "Audiobook to Video by Vexona Studios",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "icons": "node scripts/generate-icons.js",
-    "test": "npm run test:opening-titles && npm run test:open-output && npm run test:frame-renderer && npm run test:render-pipeline && npm run test:timeline-seek && npm run test:legacy-promotion",
+    "test": "npm run test:render-feedback && npm run test:opening-titles && npm run test:open-output && npm run test:frame-renderer && npm run test:render-pipeline && npm run test:timeline-seek && npm run test:legacy-promotion",
+    "test:render-feedback": "node --test tests/render-feedback.test.js && electron tests/render-feedback-ui-smoke.js",
     "test:opening-titles": "node tests/opening-titles-smoke.js",
     "test:open-output": "electron tests/open-output-ui-smoke.js",
     "test:frame-renderer": "electron tests/frame-renderer-smoke.js",

@@ -704,47 +704,7 @@ els.btnOutput.addEventListener('click', async () => {
 // ─────────────────────────────────────────────────────────────
 
 function getOpeningTitleCards() {
-  const values = state.openingTitles;
-  const presentationLabel = String(values.presentationLabel || '').trim() || 'AUDIOBOOK PRESENTATION';
-  const title = String(values.title || '').trim();
-  const subtitle = String(values.subtitle || '').trim();
-  const seriesName = String(values.seriesName || '').trim();
-  const bookNumber = String(values.bookNumber || '').trim();
-  const author = String(values.author || '').trim();
-  const originallyPublished = String(values.originallyPublished || '').trim();
-  const site = String(values.site || '').trim();
-  const cards = [];
-  if (title || subtitle) {
-    cards.push({
-      type: 'title',
-      label: presentationLabel,
-      primary: title || subtitle,
-      secondary: title ? subtitle : ''
-    });
-  }
-  if (seriesName) {
-    cards.push({
-      type: 'series',
-      label: bookNumber ? `BOOK ${bookNumber} IN THE SERIES` : 'FROM THE SERIES',
-      primary: seriesName,
-      secondary: ''
-    });
-  }
-  if (author) {
-    cards.push({ type: 'author', label: 'WRITTEN BY', primary: author, secondary: '' });
-  }
-  if (originallyPublished) {
-    cards.push({
-      type: 'published',
-      label: 'ORIGINALLY PUBLISHED',
-      primary: originallyPublished,
-      secondary: ''
-    });
-  }
-  if (site) {
-    cards.push({ type: 'site', label: 'DISCOVER MORE AT', primary: site.toUpperCase(), secondary: '' });
-  }
-  return cards;
+  return OpeningTitles.buildOpeningTitleCards(state.openingTitles);
 }
 
 function syncOpeningTitlesFromInputs() {
@@ -1503,7 +1463,9 @@ function updatePreviewSelect() {
   openingCards.forEach((card, index) => {
     const opt = document.createElement('option');
     opt.value = `opening:${index}`;
-    opt.textContent = `Opening · ${card.type === 'published' ? 'Originally Published' : card.type[0].toUpperCase() + card.type.slice(1)}`;
+    const label = card.stage === 'subtitle' ? 'Title + Subtitle'
+      : (card.type === 'published' ? 'Originally Published' : card.type[0].toUpperCase() + card.type.slice(1));
+    opt.textContent = `Opening · ${label}`;
     sel.appendChild(opt);
   });
   state.chapters.forEach((ch, i) => {
@@ -1638,11 +1600,13 @@ async function beginRender() {
   els.logBox.style.display = 'block';
   els.logContent.innerHTML = '';
   setProgress(0, 'Starting render…');
+  RenderFeedback.start();
 
   // Ensure all chapters have end times
   assignEndTimes();
 
   const params = {
+    ...getRenderEstimateParams(),
     coverDataURL: state.coverDataURL,
     bgDataURL: state.bgDataURL || null,
     wavPath: state.wavPath,
@@ -1672,7 +1636,36 @@ async function beginRender() {
   };
 
   addLog('🚀 Sending render job to main process…');
-  await window.api.startRender(params);
+  try {
+    await window.api.startRender(params);
+  } catch (error) {
+    state.isRendering = false;
+    els.btnStop.style.display = 'none';
+    checkExportReady();
+    setProgress(0, '❌ Could not start render');
+    addLog(error.message, 'err');
+    RenderFeedback.finish({ success: false });
+  }
+}
+
+function getRenderEstimateParams() {
+  return {
+    wavPath: state.wavPath,
+    audioDuration: state.audioDuration,
+    chapters: state.chapters.map(chapter => ({ startTime: chapter.startTime, endTime: chapter.endTime })),
+    codec: state.codec,
+    forceLegacyRender: state.compatibilityMode,
+    transitionStyle: state.transitionStyle,
+    transitionDuration: state.transitionDuration,
+    openingTitlesEnabled: state.openingTitlesEnabled,
+    printPromoEnabled: state.printPromoEnabled,
+    fastAudioCopy: state.fastAudioCopy,
+    introClipPath: state.introClipEnabled ? state.introClipPath : null,
+    introDurationRaw: state.introDurationRaw,
+    introStyle: state.introStyle,
+    introFadeDuration: state.introFadeDuration,
+    crf: 18
+  };
 }
 
 els.btnStop.addEventListener('click', async () => {
@@ -1721,6 +1714,7 @@ function setupRenderListeners() {
   });
 
   window.api.onRenderComplete(async (result) => {
+    RenderFeedback.finish(result);
     state.isRendering = false;
     els.btnExport.disabled = false;
     els.btnStop.style.display = 'none';
@@ -1854,6 +1848,7 @@ function readyToExport() {
 
 function checkExportReady() {
   els.btnExport.disabled = !readyToExport() || state.isRendering;
+  RenderFeedback.refresh();
 }
 
 function formatDuration(sec) {
@@ -1897,6 +1892,7 @@ document.addEventListener('keydown', (e) => {
 // ─────────────────────────────────────────────────────────────
 
 function saveSession() {
+  RenderFeedback.refresh();
   const data = {
     coverPath: state.coverPath,
     bgPath: state.bgPath,
@@ -2195,6 +2191,7 @@ async function restoreSession() {
 
 els.codecSelect.addEventListener('change', () => {
   state.codec = els.codecSelect.value;
+  RenderFeedback.refresh();
 });
 
 els.fastAudioToggle.addEventListener('change', () => {
@@ -2237,6 +2234,7 @@ function updateGpuBadge(status) {
 document.addEventListener('DOMContentLoaded', async () => {
   // Wire up render IPC listeners (exactly once, cleaned up on each render)
   setupRenderListeners();
+  RenderFeedback.init(getRenderEstimateParams);
 
   // Fetch real GPU name from Electron so the badge is always accurate
   try {

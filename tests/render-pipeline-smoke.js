@@ -31,7 +31,8 @@ async function runScenario({
 }) {
   const outputPath = path.join(root, `${name}.mp4`);
   let openingFramesRendered = 0;
-  await renderVideo({
+  let detectedEncoder;
+  const renderResult = await renderVideo({
     coverDataURL: 'smoke-test-fixture',
     wavPath,
     outputPath,
@@ -55,12 +56,14 @@ async function runScenario({
     audioCacheDir: path.join(root, 'audio-cache')
   }, {
     onProgress: () => {},
+    onProfile: profile => { detectedEncoder = profile.encoder; },
     onLog: () => {},
     prepareFrameRenderer: async () => true,
     renderFrameToFile: async (_, targetPath) => fs.copyFileSync(stillPath, targetPath),
     renderOpeningFrameToFile: async (params, targetPath) => {
       openingFramesRendered++;
-      const sourcePath = openingFixtures?.[params.openingPreviewCard?.type] || stillPath;
+      const card = params.openingPreviewCard;
+      const sourcePath = openingFixtures?.[card?.stage] || openingFixtures?.[card?.type] || stillPath;
       try { fs.linkSync(sourcePath, targetPath); }
       catch (_) { fs.copyFileSync(sourcePath, targetPath); }
     },
@@ -70,6 +73,10 @@ async function runScenario({
   });
 
   const metadata = probe(outputPath);
+  const expectedEncoders = codec === 'h265' ? ['hevc_nvenc', 'libx265'] : ['h264_nvenc', 'libx264'];
+  if (!expectedEncoders.includes(detectedEncoder) || Math.abs(renderResult.durationSeconds - expectedDuration) > 0.1) {
+    throw new Error(`${name}: render timing metadata was not reported correctly`);
+  }
   const duration = Number(metadata.format.duration);
   const video = metadata.streams.find(stream => stream.codec_type === 'video');
   const audio = metadata.streams.find(stream => stream.codec_type === 'audio');
@@ -158,7 +165,7 @@ async function main() {
     results.push(await runScenario({
       name: 'overlap-intro', root, stillPath, wavPath, introPath,
       introStyle: 'overlap', expectedDuration: 7, transitionStyle: 'cut',
-      openingTitlesEnabled: true
+      openingTitlesEnabled: true, expectedOpeningStills: 0
     }));
     results.push(await runScenario({
       name: 'h265', root, stillPath, wavPath, introPath,
@@ -167,7 +174,7 @@ async function main() {
     results.push(await runScenario({
       name: 'mp3-copy', root, stillPath, wavPath: mp3Path, introPath,
       introStyle: null, expectedDuration: 6, transitionStyle: 'cut', expectedAudioCodec: 'mp3',
-      openingTitlesEnabled: true
+      openingTitlesEnabled: true, expectedOpeningStills: 0
     }));
     results.push(await runScenario({
       name: 'multi-card-opening', root, stillPath, wavPath, introPath,
@@ -181,12 +188,12 @@ async function main() {
         site: ''
       },
       chapterSplit: 4.8,
-      expectedOpeningStills: 4
+      expectedOpeningStills: 0
     }));
 
     // Different colors catch timing errors that identical still fixtures hide.
     const openingFixtures = {};
-    for (const [type, color] of Object.entries({ title: '#dc1414', author: '#14b414', site: '#1414dc' })) {
+    for (const [type, color] of Object.entries({ 'title-only': '#dcb414', title: '#dc1414', author: '#14b414', site: '#1414dc' })) {
       openingFixtures[type] = path.join(root, `opening-${type}.png`);
       await sharp({ create: { width: 1920, height: 1080, channels: 3, background: color } }).png().toFile(openingFixtures[type]);
     }
@@ -199,13 +206,17 @@ async function main() {
         root, stillPath, wavPath: longerAudioPath, introPath,
         introStyle: overlap ? 'overlap' : null, expectedDuration: 18 + lead,
         totalDuration: 18, chapterSplit: 16, transitionStyle: 'cut',
-        openingTitlesEnabled: true, expectedOpeningStills: 4,
+        openingTitlesEnabled: true, expectedOpeningStills: 5,
         openingTitles: { title: 'A Book Title', subtitle: 'A Subtitle to Read', author: 'An Author', site: 'scrollreader.com' },
         openingFixtures,
         checkpoints: [
+          { time: 1 + lead, color: [220, 180, 20] },
+          { time: 1.9 + lead, color: [220, 180, 20] },
+          { time: 2.8 + lead, color: [220, 20, 20] },
           { time: 6 + lead, color: [220, 20, 20] },
-          { time: 7.8 + lead, color: [20, 180, 20] },
-          { time: 10.8 + lead, color: [20, 20, 220] }
+          { time: 7.2 + lead, color: [220, 20, 20] },
+          { time: 8.8 + lead, color: [20, 180, 20] },
+          { time: 11.8 + lead, color: [20, 20, 220] }
         ]
       }));
     }

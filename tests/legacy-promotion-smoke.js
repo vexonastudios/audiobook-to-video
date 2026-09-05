@@ -89,8 +89,8 @@ async function runTest() {
     if (!video || video.time_base !== '1/3000') {
       throw new Error(`Legacy output expected decoder-safe 1/3000 video time base, got ${video?.time_base || 'none'}`);
     }
-    if (openingFramesRendered !== 6) {
-      throw new Error(`Legacy opening titles expected 6 rendered stills for 5 cards, got ${openingFramesRendered}`);
+    if (openingFramesRendered !== 7) {
+      throw new Error(`Legacy opening titles expected 7 rendered stills including the title-only state, got ${openingFramesRendered}`);
     }
 
     const beforePath = path.join(root, 'before.png');

@@ -203,7 +203,7 @@
               <input id="opening-site-input" class="metadata-input" type="text" maxlength="100" value="scrollreader.com" autocomplete="off">
             </label>
           </div>
-          <p class="metadata-help">The title stays for 7 seconds with a subtitle, or 5 seconds without one. Other cards last about 3 seconds. Short opening chapters shorten the sequence to fit. Sites display in uppercase with spaced lettering. Audio and chapter times do not move.</p>
+          <p class="metadata-help">The title appears first. Two seconds later, the subtitle fades in; both stay fully visible for at least 4 seconds. Other cards last about 3 seconds. Openings too short for these reading times skip the sequence. Sites use smaller, uppercase lettering. Audio and chapter times do not move.</p>
         </div>
       </div>
 
@@ -436,6 +436,14 @@
           </label>
         </div>
 
+        <div class="render-sound-row">
+          <label for="completion-sound-toggle">
+            <input type="checkbox" id="completion-sound-toggle" checked disabled>
+            Play sound when rendering finishes
+          </label>
+          <button class="small-btn" id="btn-test-render-sound" type="button">Test sound</button>
+        </div>
+
         <div class="export-controls">
           <button class="export-btn" id="btn-export" disabled>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -465,6 +473,12 @@
           <div class="progress-track">
             <div class="progress-fill" id="progress-fill" style="width:0%"></div>
           </div>
+        </div>
+
+        <div class="render-timing">
+          <span id="render-elapsed" hidden></span>
+          <span id="render-estimate">Loading render timing…</span>
+          <span id="last-render-time" hidden></span>
         </div>
 
         <div class="log-box" id="log-box" style="display:none">
@@ -560,6 +574,8 @@
     </div>
   </div>
 
+  <script src="../src/openingTitles.js"></script>
+  <script src="renderFeedback.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

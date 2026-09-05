@@ -1,6 +1,7 @@
 const OPENING_TITLE_SECONDS_PER_CARD = 3;
-const OPENING_TITLE_SECONDS = 5;
-const OPENING_TITLE_WITH_SUBTITLE_SECONDS = 7;
+const OPENING_TITLE_SECONDS = 6;
+const OPENING_SUBTITLE_DELAY_SECONDS = 2;
+const OPENING_TITLE_READING_SECONDS = 4;
 const OPENING_TITLE_MIN_SECONDS_PER_CARD = 1.5;
 const OPENING_TITLE_FADE_SECONDS = 0.65;
 
@@ -26,8 +27,15 @@ function buildOpeningTitleCards(fields = {}) {
   const cards = [];
 
   if (values.title || values.subtitle) {
+    if (values.title && values.subtitle) {
+      cards.push({
+        type: 'title', stage: 'title-only', label: values.presentationLabel,
+        primary: values.title, secondary: ''
+      });
+    }
     cards.push({
       type: 'title',
+      stage: values.title && values.subtitle ? 'subtitle' : 'complete',
       label: values.presentationLabel,
       primary: values.title || values.subtitle,
       secondary: values.title ? values.subtitle : ''
@@ -60,24 +68,26 @@ function buildOpeningTitleCards(fields = {}) {
 }
 
 function preferredCardDuration(card) {
-  if (card.type === 'title') {
-    return card.secondary ? OPENING_TITLE_WITH_SUBTITLE_SECONDS : OPENING_TITLE_SECONDS;
-  }
+  if (card.stage === 'title-only') return OPENING_SUBTITLE_DELAY_SECONDS;
+  if (card.type === 'title') return OPENING_TITLE_SECONDS;
   return OPENING_TITLE_SECONDS_PER_CARD;
 }
 
-// Allocate whole frames, keeping a minimum reading interval for every card and
-// giving the title the extra time when the first chapter has room for it.
+function minimumCardDuration(card) {
+  if (card.stage === 'title-only') return OPENING_SUBTITLE_DELAY_SECONDS;
+  // Reserve both fades so even a shortened opening has four fully visible seconds.
+  if (card.type === 'title') return OPENING_TITLE_READING_SECONDS + 2 * OPENING_TITLE_FADE_SECONDS;
+  return OPENING_TITLE_MIN_SECONDS_PER_CARD;
+}
+
+// Keep the subtitle reveal fixed at two seconds and shorten only reading holds.
 function resolveCardTimings(cards, frameCount, fps) {
-  const minimumFrames = Math.min(
-    Math.ceil(OPENING_TITLE_MIN_SECONDS_PER_CARD * fps),
-    Math.floor(frameCount / cards.length)
-  );
-  const extraFrames = frameCount - minimumFrames * cards.length;
-  const weights = cards.map(card => preferredCardDuration(card) - OPENING_TITLE_MIN_SECONDS_PER_CARD);
+  const minimumFrames = cards.map(card => Math.ceil(minimumCardDuration(card) * fps - 1e-6));
+  const extraFrames = Math.max(0, frameCount - minimumFrames.reduce((sum, count) => sum + count, 0));
+  const weights = cards.map(card => preferredCardDuration(card) - minimumCardDuration(card));
   const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
   const extras = weights.map(weight => extraFrames * weight / totalWeight);
-  const counts = extras.map(extra => minimumFrames + Math.floor(extra));
+  const counts = extras.map((extra, index) => minimumFrames[index] + Math.floor(extra));
   const remainder = frameCount - counts.reduce((sum, count) => sum + count, 0);
   const remainderOrder = extras.map((extra, index) => ({ index, fraction: extra - Math.floor(extra) }))
     .sort((a, b) => b.fraction - a.fraction || a.index - b.index);
@@ -97,9 +107,9 @@ function resolveOpeningTitleSequence(fields, maxDuration = Infinity, fps = 30) {
 
   const idealDuration = cards.reduce((sum, card) => sum + preferredCardDuration(card), 0);
   const duration = Math.min(idealDuration, maxDuration);
-  if (duration < cards.length * OPENING_TITLE_MIN_SECONDS_PER_CARD) return null;
-
   const frameCount = Math.max(2, Math.floor(duration * fps + 1e-6));
+  const minimumFrames = cards.reduce((sum, card) => sum + Math.ceil(minimumCardDuration(card) * fps - 1e-6), 0);
+  if (frameCount < minimumFrames) return null;
   const snappedDuration = frameCount / fps;
   const cardTimings = resolveCardTimings(cards, frameCount, fps);
   return {
@@ -107,9 +117,14 @@ function resolveOpeningTitleSequence(fields, maxDuration = Infinity, fps = 30) {
     frameCount,
     duration: snappedDuration,
     cardTimings,
-    fadeDuration: Math.min(OPENING_TITLE_FADE_SECONDS, ...cardTimings.map(card => card.duration * 0.28)),
+    fadeDuration: resolveFadeDuration(cards, cardTimings),
     fps
   };
+}
+
+function resolveFadeDuration(cards, timings) {
+  return Math.min(OPENING_TITLE_FADE_SECONDS, ...timings
+    .filter((_, index) => cards[index].stage !== 'title-only').map(card => card.duration * 0.28));
 }
 
 function resolveOpeningTitleFrame(cards, time, duration, fps = 30) {
@@ -117,8 +132,13 @@ function resolveOpeningTitleFrame(cards, time, duration, fps = 30) {
     return { fromCard: null, toCard: null, mix: 0, toChapter: true };
   }
 
+  const minimumFrames = cards.reduce((sum, card) => sum + Math.ceil(minimumCardDuration(card) * fps - 1e-6), 0);
+  if (Math.round(duration * fps) < minimumFrames) {
+    return { fromCard: null, toCard: null, mix: 1, toChapter: true };
+  }
+
   const cardTimings = resolveCardTimings(cards, Math.max(1, Math.round(duration * fps)), fps);
-  const fadeDuration = Math.min(OPENING_TITLE_FADE_SECONDS, ...cardTimings.map(card => card.duration * 0.28));
+  const fadeDuration = resolveFadeDuration(cards, cardTimings);
   const safeTime = Math.max(0, Math.min(duration - Number.EPSILON, time));
   const matchedIndex = cardTimings.findIndex(card => safeTime < card.end);
   const index = matchedIndex < 0 ? cards.length - 1 : matchedIndex;
@@ -160,10 +180,12 @@ function smoothstep(value) {
   return t * t * (3 - 2 * t);
 }
 
-module.exports = {
+const openingTitlesAPI = {
   OPENING_TITLE_SECONDS_PER_CARD,
   buildOpeningTitleCards,
   normalizeOpeningTitles,
   resolveOpeningTitleSequence,
   resolveOpeningTitleFrame
 };
+if (typeof module !== 'undefined' && module.exports) module.exports = openingTitlesAPI;
+else window.OpeningTitles = openingTitlesAPI;

@@ -4,6 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const sharp = require('sharp');
 const { imageToDataURL, processLogo } = require('../src/logoProcessor');
+const { buildOpeningTitleCards } = require('../src/openingTitles');
 
 async function run() {
   const projectRoot = path.resolve(__dirname, '..');
@@ -17,8 +18,11 @@ async function run() {
   const promotionOverlayPath = path.join(outputDir, 'print-promotion-overlay.png');
   const openingBlankPath = path.join(outputDir, 'opening-blank.png');
   const openingTitlePath = path.join(outputDir, 'opening-title.png');
+  const openingTitleOnlyPath = path.join(outputDir, 'opening-title-only.png');
+  const openingSubtitleFadePath = path.join(outputDir, 'opening-subtitle-fade.png');
   const openingSeriesPath = path.join(outputDir, 'opening-series.png');
   const openingAuthorPath = path.join(outputDir, 'opening-author.png');
+  const openingPublishedPath = path.join(outputDir, 'opening-published.png');
   const openingSitePath = path.join(outputDir, 'opening-site.png');
   const transitionPaths = ['fade', 'dissolve', 'flare', 'zoom'].map(style => ({
     style,
@@ -37,7 +41,7 @@ async function run() {
 
   try {
     await window.loadFile(path.join(projectRoot, 'frame-window', 'index.html'));
-    const coverDataURL = await imageToDataURL(fixturePath);
+    const coverDataURL = await imageToDataURL(process.env.OPENING_PREVIEW_COVER || fixturePath);
     const logoDataURL = await processLogo(fixturePath, [211, 193, 166]);
     const baseParams = {
       coverDataURL,
@@ -64,24 +68,26 @@ async function run() {
         chapter: { number: 2, title: 'Timestamped Timeline', isNumbered: true }
       })}, ${JSON.stringify(chapterTwoPath)})`
     );
-    const openingCards = [
-      { type: 'title', label: 'A SCROLL READER ORIGINAL PRESENTATION', primary: 'A Remarkable Story', secondary: 'The Complete Account' },
-      { type: 'series', label: 'BOOK 2 IN THE SERIES', primary: 'The Heritage Library', secondary: '' },
-      { type: 'author', label: 'WRITTEN BY', primary: 'Helen S. Dyer', secondary: '' },
-      { type: 'published', label: 'ORIGINALLY PUBLISHED', primary: '1910', secondary: '' },
-      { type: 'site', label: 'DISCOVER MORE AT', primary: 'scrollreader.com', secondary: '' }
-    ];
+    const openingCards = buildOpeningTitleCards({
+      presentationLabel: 'SCROLL READER PRESENTS',
+      title: 'Into the Darkness of Brazil with the Bible',
+      subtitle: 'The Remarkable Missionary Adventures of Frederick C. Glass',
+      seriesName: 'The Heritage Library', bookNumber: '2', author: 'Frederick C. Glass',
+      originallyPublished: '1923', site: 'scrollreader.com'
+    });
     await window.webContents.executeJavaScript(
       `window.renderOpeningFrameToFile(${JSON.stringify({
         chapter: { number: null, title: 'Introduction', isNumbered: false },
         openingBlank: true
       })}, ${JSON.stringify(openingBlankPath)})`
     );
-    for (const [targetPath, time] of [[openingTitlePath, 6], [openingSeriesPath, 8], [openingAuthorPath, 11], [openingSitePath, 17]]) {
+    for (const [targetPath, time] of [[openingTitleOnlyPath, 1], [openingSubtitleFadePath, 2.3],
+      [openingTitlePath, 6], [openingSeriesPath, 9], [openingAuthorPath, 12],
+      [openingPublishedPath, 15], [openingSitePath, 18]]) {
       await window.webContents.executeJavaScript(
         `window.renderOpeningFrameToFile(${JSON.stringify({
           chapter: { number: null, title: 'Introduction', isNumbered: false },
-          openingSequenceFrame: { cards: openingCards, time, duration: 19 }
+          openingSequenceFrame: { cards: openingCards, time, duration: 20 }
         })}, ${JSON.stringify(targetPath)})`
       );
     }
@@ -110,8 +116,11 @@ async function run() {
       chapterTwoPath,
       openingBlankPath,
       openingTitlePath,
+      openingTitleOnlyPath,
+      openingSubtitleFadePath,
       openingSeriesPath,
       openingAuthorPath,
+      openingPublishedPath,
       openingSitePath,
       promotionPath,
       promotionOverlayPath,
@@ -134,6 +143,15 @@ async function run() {
     }
     if (fs.readFileSync(openingTitlePath).equals(fs.readFileSync(openingSeriesPath))) {
       throw new Error('Series card did not differ from the title card.');
+    }
+    const titleRegion = { left: 780, top: 315, width: 1080, height: 405 };
+    const fullTitlePixels = await sharp(openingTitlePath).extract(titleRegion).raw().toBuffer();
+    for (const imagePath of [openingTitleOnlyPath, openingSubtitleFadePath]) {
+      const pixels = await sharp(imagePath).extract(titleRegion).raw().toBuffer();
+      if (!pixels.equals(fullTitlePixels)) throw new Error('Title moved or faded during subtitle reveal.');
+    }
+    if (fs.readFileSync(openingTitleOnlyPath).equals(fs.readFileSync(openingTitlePath))) {
+      throw new Error('Subtitle did not appear in the later title state.');
     }
     // Tracked typography must produce the same pixels regardless of the
     // caller's alignment; this catches the false gaps around narrow glyphs.
@@ -163,15 +181,45 @@ async function run() {
       const ctx = canvas.getContext('2d');
       const calls = [];
       const original = ctx.fillText.bind(ctx);
-      ctx.fillText = (text, x, y) => { calls.push({ text, x, y, width: ctx.measureText(text).width }); original(text, x, y); };
+      ctx.fillText = (text, x, y) => {
+        const metrics = ctx.measureText(text);
+        calls.push({ text, x, y, font: ctx.font, tracking: ctx.letterSpacing,
+          left: x - metrics.actualBoundingBoxLeft, right: x + metrics.actualBoundingBoxRight });
+        original(text, x, y);
+      };
       drawOpeningTitleCard(ctx, { type: 'site', label: 'DISCOVER MORE AT', primary: 'scrollreader.com', secondary: '' }, {});
-      const site = calls.filter(call => call.y === 383);
-      const left = site[0].x;
-      const right = site[site.length - 1].x + site[site.length - 1].width;
-      return { text: site.map(call => call.text).join(''), gap: site[1].x - site[0].x - site[0].width, center: (left + right) / 2, width: right - left };
+      const site = calls.find(call => call.y === 383);
+      return { text: site.text, font: site.font, tracking: site.tracking,
+        center: (site.left + site.right) / 2, width: site.right - site.left };
     })()`);
-    if (siteTypography.text !== 'SCROLLREADER.COM' || siteTypography.gap < 2 || Math.abs(siteTypography.center - 880) > 0.01 || siteTypography.width > 666.01) {
+    if (siteTypography.text !== 'SCROLLREADER.COM' || parseFloat(siteTypography.tracking) < 2
+      || !siteTypography.font.includes('38px') || Math.abs(siteTypography.center - 880) > 0.01 || siteTypography.width > 560.01) {
       throw new Error('Website typography was not uppercase, evenly tracked, centered, and fitted: ' + JSON.stringify(siteTypography));
+    }
+    const labels = await window.webContents.executeJavaScript(`(() => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1200; canvas.height = 200;
+      const ctx = canvas.getContext('2d');
+      const calls = [];
+      const original = ctx.fillText.bind(ctx);
+      ctx.fillText = (text, x, y) => {
+        original(text, x, y);
+        const spacedWidth = ctx.measureText(text).width;
+        const tracking = ctx.letterSpacing;
+        ctx.save(); ctx.letterSpacing = '0px';
+        const plainWidth = ctx.measureText(text).width;
+        ctx.restore();
+        calls.push({ text, tracking, kerning: ctx.fontKerning, font: ctx.font, spacedWidth, plainWidth });
+      };
+      for (const label of ['WRITTEN BY', 'ORIGINALLY PUBLISHED']) drawTrackedToFit(ctx, label, 500, 100, 640);
+      return calls;
+    })()`);
+    // Electron 29 can return an empty letterSpacing getter after save/restore,
+    // even though its text metrics correctly include the configured spacing.
+    if (labels.length !== 2 || labels[0].text !== 'WRITTEN BY' || labels[1].text !== 'ORIGINALLY PUBLISHED'
+      || labels.some(label => label.kerning !== 'normal'
+        || Math.abs(label.spacedWidth - label.plainWidth - Array.from(label.text).length * 1.5) > 0.05)) {
+      throw new Error('Labels should be shaped as whole phrases with natural kerning and subtle spacing: ' + JSON.stringify(labels));
     }
     if (fs.readFileSync(openingTitlePath).equals(fs.readFileSync(chapterOnePath))) {
       throw new Error('Opening title card did not differ from a chapter frame.');

@@ -33,7 +33,7 @@ const state = {
   coverBorderWidth: 0,
 
   // Chapter transition
-  transitionStyle: 'fade',  // cut | fade | dissolve | flare | zoom
+  transitionStyle: 'cut',  // cut | fade | dissolve | flare | zoom
   transitionDuration: 1.0,  // seconds
 
   // Title font size: 0 = auto-fit, >0 = fixed px
@@ -267,7 +267,7 @@ els.btnNewProject.addEventListener('click', () => {
       blurAmount: 40,
       bgOpacity: 0.65,
       coverBorderWidth: 0,
-      transitionStyle: 'fade',
+      transitionStyle: 'cut',
       transitionDuration: 1.0,
       introClipPath: null,
       introClipEnabled: false,
@@ -297,7 +297,7 @@ els.btnNewProject.addEventListener('click', () => {
       compatibilityMode: false
     });
     // Reset transition UI
-    els.transitionSelect.value = 'fade';
+    els.transitionSelect.value = 'cut';
     els.transitionDurSlider.value = 10;
     els.transitionDurVal.textContent = '1.0s';
     updateTransitionUI();
@@ -1935,6 +1935,10 @@ async function restoreSession() {
 
   // Restore transition settings early so UI reflects saved values
   const stored0 = localStorage.getItem('audiobook-video-gen-session');
+  // A project without transition settings uses the default, not the previous
+  // project's selection. Explicitly saved transitions are preserved below.
+  state.transitionStyle = 'cut';
+  els.transitionSelect.value = 'cut';
   if (stored0) {
     try {
       const d0 = JSON.parse(stored0);

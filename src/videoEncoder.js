@@ -4,6 +4,7 @@ const os = require('os');
 const { spawn } = require('child_process');
 const fluent = require('fluent-ffmpeg');
 const { resolveOpeningTitleSequence } = require('./openingTitles');
+const { buildChapterTimeline, transitionAlpha } = require('./chapterTimeline');
 let ffmpegPath = require('ffmpeg-static');
 let ffprobePath = require('@ffprobe-installer/ffprobe').path;
 
@@ -66,7 +67,7 @@ async function renderVideo(params, callbacks) {
     chapters, blurAmount, bgOpacity, accentColor,
     logoDataURL, crf = 28,
     coverBorderWidth = 0,
-    transitionStyle = 'fade',
+    transitionStyle = 'cut',
     transitionDuration = 1.0,
     introClipPath = null,
     introAudioEnabled = true,
@@ -89,8 +90,10 @@ async function renderVideo(params, callbacks) {
     renderFrame,
     renderOpeningFrameToFile,
     renderPromotionOverlayToFile,
+    encodeParallelism,
     isCancelled = () => false
   } = callbacks;
+  const chapterTimeline = buildChapterTimeline(chapters, transitionStyle, transitionDuration, OUTPUT_FPS);
   const tmpDir = path.join(os.tmpdir(), `vexona-render-${Date.now()}`);
   fs.mkdirSync(tmpDir, { recursive: true });
 
@@ -113,7 +116,10 @@ async function renderVideo(params, callbacks) {
       ? (codec === 'h265' ? 'hevc_nvenc' : 'h264_nvenc')
       : (codec === 'h265' ? 'libx265' : 'libx264') });
     // RTX 5090 supports up to 8 concurrent NVENC sessions; CPU stays ≤ 3
-    const parallelism = useGPU ? 8 : 3;
+    // A host/test may cap concurrency when another render is using the GPU.
+    const maximumParallelism = useGPU ? 8 : 3;
+    const parallelism = Number.isInteger(encodeParallelism) && encodeParallelism > 0
+      ? Math.min(encodeParallelism, maximumParallelism) : maximumParallelism;
     if (useGPU) onLog(`🚀 Codec: ${codec === 'h265' ? 'H.265 HEVC NVENC' : 'H.264 NVENC'} | Parallelism: ${parallelism}`);
     else onLog(`⚙️  Codec: ${codec === 'h265' ? 'H.265 libx265' : 'H.264 libx264'} | Parallelism: ${parallelism}`);
     onLog(`\n🎬 Rendering ${chapters.length} chapter stills...`);
@@ -154,11 +160,16 @@ async function renderVideo(params, callbacks) {
     const transSegmentPaths = []; // one per gap between chapters (length = chapters.length - 1)
 
     if (transitionStyle !== 'cut' && chapters.length > 1) {
-      const transFrameCount = Math.max(2, Math.round(TRANSITION_FPS * transitionDuration));
-      onLog(`\n✨ Rendering ${transitionStyle} transitions (${transitionDuration}s each, ${transFrameCount} frames)...`);
+      onLog(`\n✨ Rendering ${transitionStyle} transitions (up to ${transitionDuration}s each; chapter markers stay fixed)...`);
 
       for (let i = 0; i < chapters.length - 1; i++) {
         if (isCancelled()) throw new Error('RENDER_CANCELLED');
+        const transition = chapterTimeline.transitions[i];
+        if (!transition) { transSegmentPaths.push(null); continue; }
+        const transFrameCount = transition.frameCount;
+        if (transFrameCount < Math.round(TRANSITION_FPS * transitionDuration)) {
+          onLog(`  Transition ${i + 1} shortened to ${transition.duration.toFixed(2)}s to fit adjacent chapters; timestamps unchanged.`);
+        }
         onLog(`  Transition ${i + 1}/${chapters.length - 1}: Ch.${i + 1} → Ch.${i + 2}`);
 
         const transDir = path.join(tmpDir, `trans_${String(i).padStart(3,'0')}`);
@@ -167,7 +178,7 @@ async function renderVideo(params, callbacks) {
         const transFramePaths = [];
 
         for (let f = 0; f < transFrameCount; f++) {
-          const alpha = f / (transFrameCount - 1); // 0.0 → 1.0
+          const alpha = transitionAlpha(transition, f);
 
           // Build per-frame params based on transition type
           const frameParams = buildTransitionFrameParams({
@@ -193,7 +204,7 @@ async function renderVideo(params, callbacks) {
           frameDir: transDir,
           outputPath: transSegPath,
           fps: TRANSITION_FPS,
-          duration: transitionDuration,
+          duration: transition.duration,
           crf,
           useGPU,
           codec,
@@ -203,13 +214,10 @@ async function renderVideo(params, callbacks) {
       }
     }
 
-    const firstTransitionBudget = transitionStyle !== 'cut' && chapters.length > 1
-      ? transitionDuration / 2
-      : 0;
     const openingSequence = openingTitlesEnabled
       ? resolveOpeningTitleSequence(
           openingTitles,
-          Math.max(0, chapters[0].endTime - chapters[0].startTime - firstTransitionBudget - (1 / OUTPUT_FPS)),
+          Math.max(0, chapterTimeline.stills[0].duration - (1 / OUTPUT_FPS)),
           OUTPUT_FPS
         )
       : null;
@@ -292,30 +300,10 @@ async function renderVideo(params, callbacks) {
       const batchIdxs = Array.from({ length: Math.min(parallelism, chapters.length - b) }, (_, k) => b + k);
 
       await Promise.all(batchIdxs.map(async (i) => {
-        const ch = chapters[i];
-        const rawDuration = ch.endTime - ch.startTime;
-
-        // ── Transition budget ────────────────────────────────────────────────
-        // Transitions are interleaved BETWEEN segments by the concat step, so
-        // naïvely they ADD time to the video, causing ~1s of drift per chapter.
-        // Fix: carve the transition time OUT of the adjacent chapter segments so
-        // that total video duration == total audio duration.
-        //
-        //   Each segment donates:
-        //     • transitionDuration/2 to the transition that FOLLOWS it  (trailing)
-        //     • transitionDuration/2 to the transition that PRECEDES it  (leading)
-        //
-        // First/last chapters only donate one half (they have one neighbour).
-        const usingTransitions = transitionStyle !== 'cut' && chapters.length > 1;
-        const hasLeading  = usingTransitions && i > 0;
-        const hasTrailing = usingTransitions && i < chapters.length - 1;
-        const transitionBudget = (hasLeading  ? transitionDuration / 2 : 0)
-                               + (hasTrailing ? transitionDuration / 2 : 0);
-
-        // Snap to whole frames; keep minimum of one frame (0.2s at 5fps)
-        const openingBudget = i === 0 && openingSequence ? openingSequence.duration : 0;
-        const adjustedDuration = Math.max(1 / OUTPUT_FPS, rawDuration - transitionBudget - openingBudget);
-        const frames   = Math.round(adjustedDuration * OUTPUT_FPS);
+        // Consume the shared absolute-frame schedule; never round individual
+        // chapter durations or add minimum holds outside their original slot.
+        const openingFrames = i === 0 && openingSequence ? openingSequence.frameCount : 0;
+        const frames = chapterTimeline.stills[i].frameCount - openingFrames;
         const duration = frames / OUTPUT_FPS;
 
         await encodeSegment({
@@ -702,8 +690,8 @@ function encodeSegment({ imagePath, outputPath, duration, fps, crf, useGPU, code
     const nvencCodec = codec === 'h265' ? 'hevc_nvenc' : 'h264_nvenc';
     return runFFmpeg([
       '-loop', '1', '-framerate', String(fps),
-      '-t', duration.toFixed(6),
       '-i', imagePath,
+      '-frames:v', String(Math.round(duration * fps)),
       '-c:v', nvencCodec,
       '-preset', 'p4',
       '-tune', 'hq',
@@ -719,8 +707,8 @@ function encodeSegment({ imagePath, outputPath, duration, fps, crf, useGPU, code
   const cpuCodec = codec === 'h265' ? 'libx265' : 'libx264';
   return runFFmpeg([
     '-loop', '1', '-framerate', String(fps),
-    '-t', duration.toFixed(6),
     '-i', imagePath,
+    '-frames:v', String(Math.round(duration * fps)),
     '-c:v', cpuCodec,
     '-preset', 'ultrafast',
     '-tune', codec === 'h265' ? 'fastdecode' : 'stillimage',
@@ -743,7 +731,7 @@ function encodeFrameSequence({ frameDir, outputPath, fps, duration, crf, useGPU,
     return runFFmpeg([
       '-framerate', String(fps),
       '-i', inputPattern,
-      '-t', duration.toFixed(6),
+      '-frames:v', String(Math.round(duration * fps)),
       '-c:v', nvencCodec,
       '-preset', 'p4',
       '-tune', 'hq',
@@ -760,7 +748,7 @@ function encodeFrameSequence({ frameDir, outputPath, fps, duration, crf, useGPU,
   return runFFmpeg([
     '-framerate', String(fps),
     '-i', inputPattern,
-    '-t', duration.toFixed(6),
+    '-frames:v', String(Math.round(duration * fps)),
     '-c:v', cpuCodec,
     '-preset', 'ultrafast',
     '-crf', String(crf),

@@ -4,6 +4,7 @@ const path = require('path');
 const HISTORY_LIMIT = 50;
 
 function renderProfile(params, encoder = null) {
+  const transitionStyle = params.transitionStyle || 'cut';
   return {
     pipeline: params.forceLegacyRender ? 'legacy-v1' : 'optimized-v1',
     width: 1920,
@@ -12,8 +13,8 @@ function renderProfile(params, encoder = null) {
     codec: params.codec || 'h264',
     encoder,
     crf: params.crf ?? 18,
-    transitionStyle: params.transitionStyle || 'fade',
-    transitionDuration: params.transitionStyle === 'cut' ? 0 : (params.transitionDuration ?? 1),
+    transitionStyle,
+    transitionDuration: transitionStyle === 'cut' ? 0 : (params.transitionDuration ?? 1),
     openingTitles: params.openingTitlesEnabled === true,
     printPromotion: params.printPromoEnabled !== false,
     introStyle: params.introClipPath ? (params.introStyle || 'push') : 'none',

@@ -27,10 +27,11 @@ async function runScenario({
   transitionStyle, codec = 'h264', expectedAudioCodec = 'aac',
   openingTitlesEnabled = false, openingTitles = null,
   chapterSplit = 3, expectedOpeningStills = 2, totalDuration = 6,
-  openingFixtures = null, checkpoints = []
+  openingFixtures = null, checkpoints = [], expectedTransitionFrames = null
 }) {
   const outputPath = path.join(root, `${name}.mp4`);
   let openingFramesRendered = 0;
+  let transitionFramesRendered = 0;
   let detectedEncoder;
   const renderResult = await renderVideo({
     coverDataURL: 'smoke-test-fixture',
@@ -67,7 +68,10 @@ async function runScenario({
       try { fs.linkSync(sourcePath, targetPath); }
       catch (_) { fs.copyFileSync(sourcePath, targetPath); }
     },
-    renderTransitionFrameToFile: async (_, targetPath) => fs.copyFileSync(stillPath, targetPath),
+    renderTransitionFrameToFile: async (_, targetPath) => {
+      transitionFramesRendered++;
+      fs.copyFileSync(stillPath, targetPath);
+    },
     renderPromotionFrameToFile: async (_, targetPath) => fs.copyFileSync(stillPath, targetPath),
     isCancelled: () => false
   });
@@ -105,6 +109,9 @@ async function runScenario({
   }
   if (openingTitlesEnabled && openingFramesRendered !== expectedOpeningStills) {
     throw new Error(`${name}: expected ${expectedOpeningStills} opening stills, got ${openingFramesRendered}`);
+  }
+  if (expectedTransitionFrames !== null && transitionFramesRendered !== expectedTransitionFrames) {
+    throw new Error(`${name}: expected ${expectedTransitionFrames} transition frames, got ${transitionFramesRendered}`);
   }
   run(ffmpegPath, ['-hide_banner', '-loglevel', 'error', '-i', outputPath, '-f', 'null', nullOutput]);
   run(ffmpegPath, [
@@ -154,6 +161,11 @@ async function main() {
     ]);
 
     const results = [];
+    results.push(await runScenario({
+      name: 'default-cut-one-frame-final-chapter', root, stillPath, wavPath, introPath,
+      introStyle: null, expectedDuration: 6, chapterSplit: 6 - 1 / 30,
+      expectedTransitionFrames: 0
+    }));
     results.push(await runScenario({
       name: 'transition', root, stillPath, wavPath, introPath,
       introStyle: null, expectedDuration: 6, transitionStyle: 'fade'
@@ -205,7 +217,7 @@ async function main() {
         name: overlap ? 'readable-opening-overlap' : 'readable-opening',
         root, stillPath, wavPath: longerAudioPath, introPath,
         introStyle: overlap ? 'overlap' : null, expectedDuration: 18 + lead,
-        totalDuration: 18, chapterSplit: 16, transitionStyle: 'cut',
+        totalDuration: 18, chapterSplit: 16, transitionStyle: overlap ? 'cut' : 'fade',
         openingTitlesEnabled: true, expectedOpeningStills: 5,
         openingTitles: { title: 'A Book Title', subtitle: 'A Subtitle to Read', author: 'An Author', site: 'scrollreader.com' },
         openingFixtures,

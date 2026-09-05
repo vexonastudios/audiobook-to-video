@@ -28,6 +28,34 @@ async function runTest() {
   try {
     await window.loadFile(path.join(projectRoot, 'renderer', 'index.html'));
     await window.webContents.executeJavaScript('localStorage.clear()');
+    await window.webContents.executeJavaScript('restoreSession()');
+    async function checkTransition(expected) {
+      const actual = await window.webContents.executeJavaScript(`({
+        style: state.transitionStyle,
+        selected: document.getElementById('transition-select').value,
+        disabled: document.getElementById('transition-dur-slider').disabled
+      })`);
+      if (actual.style !== expected || actual.selected !== expected || actual.disabled !== (expected === 'cut')) {
+        throw new Error(`Wrong transition default/restoration: ${JSON.stringify(actual)}`);
+      }
+    }
+    await checkTransition('cut');
+    await window.webContents.executeJavaScript(`(async () => {
+      localStorage.setItem('audiobook-video-gen-session', JSON.stringify({ transitionStyle: 'fade', transitionDuration: 1.1 }));
+      await restoreSession();
+    })()`);
+    await checkTransition('fade');
+    await window.webContents.executeJavaScript(`(async () => {
+      localStorage.setItem('audiobook-video-gen-session', '{}');
+      await restoreSession();
+    })()`);
+    await checkTransition('cut');
+    await window.webContents.executeJavaScript(`
+      state.transitionStyle = 'fade';
+      window.confirm = () => true;
+      document.getElementById('btn-new-project').click();
+    `);
+    await checkTransition('cut');
     window.webContents.send('render-complete', { success: true, outputPath: completedPath });
     await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -45,7 +73,7 @@ async function runTest() {
       throw new Error(`Open Video requested ${openedPath || 'nothing'}, expected ${completedPath}`);
     }
 
-    console.log('Open completed video UI smoke test passed.');
+    console.log('Open completed video and transition defaults/restoration UI smoke test passed.');
   } finally {
     if (!window.isDestroyed()) window.destroy();
     ipcMain.removeHandler('get-gpu-name');

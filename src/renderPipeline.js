@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { spawn } = require('child_process');
 const fluent = require('fluent-ffmpeg');
 const { resolveOpeningTitleSequence } = require('./openingTitles');
+const { buildChapterTimeline, transitionAlpha } = require('./chapterTimeline');
 
 let ffmpegPath = require('ffmpeg-static');
 let ffprobePath = require('@ffprobe-installer/ffprobe').path;
@@ -43,7 +44,7 @@ async function renderVideo(params, callbacks) {
     logoDataURL,
     crf = 18,
     coverBorderWidth = 0,
-    transitionStyle = 'fade',
+    transitionStyle = 'cut',
     transitionDuration = 1,
     introClipPath = null,
     introAudioEnabled = true,
@@ -72,6 +73,7 @@ async function renderVideo(params, callbacks) {
   } = callbacks;
 
   if (!chapters || chapters.length === 0) throw new Error('No chapters were provided for rendering.');
+  const chapterTimeline = buildChapterTimeline(chapters, transitionStyle, transitionDuration, OUTPUT_FPS);
   if (!prepareFrameRenderer || !renderFrameToFile || !renderTransitionFrameToFile) {
     throw new Error('Optimized frame renderer callbacks are unavailable.');
   }
@@ -169,12 +171,17 @@ async function renderVideo(params, callbacks) {
       const groups = [];
       if (transitionStyle === 'cut' || chapters.length < 2) return groups;
 
-      const frameCount = Math.max(2, Math.round(OUTPUT_FPS * transitionDuration));
-      const totalFrames = frameCount * (chapters.length - 1);
+      const totalFrames = chapterTimeline.transitions.reduce((sum, transition) => sum + (transition?.frameCount || 0), 0);
       let renderedFrames = 0;
       onLog(`\n✨ Rendering ${chapters.length - 1} transitions from completed stills (${totalFrames} frames)...`);
 
       for (let i = 0; i < chapters.length - 1; i++) {
+        const transition = chapterTimeline.transitions[i];
+        if (!transition) { groups.push(null); continue; }
+        const frameCount = transition.frameCount;
+        if (frameCount < Math.round(OUTPUT_FPS * transitionDuration)) {
+          onLog(`  Transition ${i + 1} shortened to ${transition.duration.toFixed(2)}s to fit adjacent chapters; timestamps unchanged.`);
+        }
         const transitionDir = path.join(tmpDir, `transition_${String(i).padStart(3, '0')}`);
         fs.mkdirSync(transitionDir, { recursive: true });
         const paths = [];
@@ -186,7 +193,7 @@ async function renderVideo(params, callbacks) {
             fromPath: chapterFramePaths[i],
             toPath: chapterFramePaths[i + 1],
             transitionStyle,
-            alpha: f / (frameCount - 1)
+            alpha: transitionAlpha(transition, f)
           }, framePath);
           paths.push(framePath);
           renderedFrames++;
@@ -198,13 +205,10 @@ async function renderVideo(params, callbacks) {
     });
 
     const firstChapterDuration = chapters[0].endTime - chapters[0].startTime;
-    const firstChapterTransitionBudget = transitionStyle !== 'cut' && chapters.length > 1
-      ? transitionDuration / 2
-      : 0;
     let openingSequence = openingTitlesEnabled
       ? resolveOpeningTitleSequence(
           openingTitles,
-          Math.max(0, firstChapterDuration - firstChapterTransitionBudget - FRAME_DURATION),
+          Math.max(0, chapterTimeline.stills[0].duration - FRAME_DURATION),
           OUTPUT_FPS
         )
       : null;
@@ -266,12 +270,9 @@ async function renderVideo(params, callbacks) {
       : null;
 
     let timelineEntries = buildTimelineEntries({
-      chapters,
+      chapterTimeline,
       chapterFramePaths,
       transitionFrames,
-      transitionStyle,
-      transitionDuration,
-      totalDuration
     });
 
     if (printPromoEnabled) {
@@ -467,39 +468,22 @@ async function renderVideo(params, callbacks) {
 }
 
 function buildTimelineEntries({
-  chapters,
+  chapterTimeline,
   chapterFramePaths,
   transitionFrames,
-  transitionStyle,
-  transitionDuration,
-  totalDuration
 }) {
   const entries = [];
-  const usingTransitions = transitionStyle !== 'cut' && chapters.length > 1;
-
-  for (let i = 0; i < chapters.length; i++) {
-    const rawDuration = chapters[i].endTime - chapters[i].startTime;
-    const hasLeading = usingTransitions && i > 0;
-    const hasTrailing = usingTransitions && i < chapters.length - 1;
-    const transitionBudget = (hasLeading ? transitionDuration / 2 : 0)
-      + (hasTrailing ? transitionDuration / 2 : 0);
-    const stillDuration = Math.max(FRAME_DURATION, rawDuration - transitionBudget);
-
+  for (let i = 0; i < chapterTimeline.stills.length; i++) {
+    const stillDuration = chapterTimeline.stills[i].duration;
     entries.push({ path: chapterFramePaths[i], duration: stillDuration, kind: 'still', chapterIndex: i });
 
     if (transitionFrames[i]) {
-      const frameDuration = transitionDuration / transitionFrames[i].length;
       for (const framePath of transitionFrames[i]) {
-        entries.push({ path: framePath, duration: frameDuration, kind: 'transition', chapterIndex: i });
+        entries.push({ path: framePath, duration: FRAME_DURATION, kind: 'transition', chapterIndex: i });
       }
     }
   }
 
-  const delta = totalDuration - sumEntryDurations(entries);
-  entries[entries.length - 1].duration += delta;
-  if (entries[entries.length - 1].duration <= FRAME_DURATION) {
-    throw new Error('The final timeline frame is too short to encode safely.');
-  }
   return entries;
 }
 
@@ -725,8 +709,8 @@ async function encodeVisualTimeline({
 function writeTimelineManifest(entries, manifestPath) {
   const manifestEntries = entries.flatMap(splitLongHoldEntry);
   const last = manifestEntries[manifestEntries.length - 1];
-  if (last.duration <= FRAME_DURATION) throw new Error('Timeline needs at least one frame of final hold duration.');
-  last.duration -= FRAME_DURATION;
+  const repeatLast = last.duration > FRAME_DURATION + 1e-9;
+  if (repeatLast) last.duration -= FRAME_DURATION;
 
   const lines = ['ffconcat version 1.0'];
   for (const entry of manifestEntries) {
@@ -737,8 +721,10 @@ function writeTimelineManifest(entries, manifestPath) {
 
   // The concat image demuxer needs a repeated final sample so the preceding
   // duration is honored. Its natural 1/30s duration restores the subtracted hold.
-  lines.push(`file ${quoteConcatPath(last.path)}`);
-  lines.push(`option framerate ${OUTPUT_FPS}`);
+  if (repeatLast) {
+    lines.push(`file ${quoteConcatPath(last.path)}`);
+    lines.push(`option framerate ${OUTPUT_FPS}`);
+  }
   fs.writeFileSync(manifestPath, lines.join('\n'), 'utf8');
 }
 

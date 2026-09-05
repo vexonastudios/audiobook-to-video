@@ -339,8 +339,8 @@
             <span>Transition Style</span>
           </label>
           <select id="transition-select" class="transition-select">
-            <option value="cut">✂️  Cut (instant)</option>
-            <option value="fade" selected>⬛  Fade to Black</option>
+            <option value="cut" selected>✂️  Cut (instant)</option>
+            <option value="fade">⬛  Fade to Black</option>
             <option value="dissolve">🔀  Cross Dissolve</option>
             <option value="flare">✨  Lens Flare Burn</option>
             <option value="zoom">🔍  Zoom Blur Push</option>
@@ -351,8 +351,9 @@
             <span>Duration</span>
             <span class="slider-value" id="transition-dur-val">1.0s</span>
           </label>
-          <input type="range" id="transition-dur-slider" min="3" max="30" value="10" class="slider">
-          <div style="font-size:10px;color:var(--text-muted);margin-top:4px" id="transition-cut-note">No transition frames are added for Cut mode.</div>
+          <input type="range" id="transition-dur-slider" min="3" max="30" value="10" class="slider" disabled>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:4px" id="transition-cut-note">Cut switches instantly at each chapter marker.</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:4px">Other transitions straddle the chapter marker and shorten to fit short chapters. Audio and chapter timestamps stay unchanged.</div>
         </div>
 
         <div class="slider-row" style="align-items:center;margin-top:8px">

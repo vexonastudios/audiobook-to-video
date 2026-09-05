@@ -23,7 +23,7 @@ Example Format:
 
 ## 4. Adjust Styles & Preview (Center Panel)
 - Use the sliders on the left to adjust background blur and opacity.
-- Pick a **Transition Style** (like Fade, Cross Dissolve, or Zoom Blur) and set its duration. 
+- **Transition Style** defaults to **Cut**, switching instantly at each chapter marker. Optional effects like Fade to Black straddle the marker: the fade reaches black at the marker, then reveals the next chapter. Their duration shortens automatically around short chapters, so they never add time. Existing projects retain their saved selection.
 - Enable **Opening Title Sequence** to rotate the book title/subtitle, optional series and book number, author, original publication, and site through the right-side title area at the start. The small heading above the title is editable. The title appears first, then the subtitle fades in two seconds later without moving the title. Both stay fully visible for at least four seconds. A full title/subtitle opening lasts eight seconds; a title alone lasts six. Other cards last about three seconds. Short opening chapters can shorten the holds, but skip the sequence if its minimum reading times cannot fit. Site addresses use smaller uppercase lettering. The cover remains fixed and chapter/audio timing does not change. The app renders each state once and lets FFmpeg animate the crossfades efficiently.
 - Use the **Preview** section's dropdown above the canvas to inspect every opening card and chapter layout.
 

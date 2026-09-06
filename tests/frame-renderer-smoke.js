@@ -15,7 +15,9 @@ async function run() {
   const chapterOnePath = path.join(outputDir, 'chapter-one.png');
   const chapterTwoPath = path.join(outputDir, 'chapter-two.png');
   const promotionPath = path.join(outputDir, 'print-promotion.png');
+  const promotionFallbackPath = path.join(outputDir, 'print-promotion-cover-fallback.png');
   const promotionOverlayPath = path.join(outputDir, 'print-promotion-overlay.png');
+  const promotionArtworkPath = path.join(outputDir, 'print-promotion-artwork.png');
   const openingBlankPath = path.join(outputDir, 'opening-blank.png');
   const openingTitlePath = path.join(outputDir, 'opening-title.png');
   const openingTitleOnlyPath = path.join(outputDir, 'opening-title-only.png');
@@ -42,6 +44,14 @@ async function run() {
   try {
     await window.loadFile(path.join(projectRoot, 'frame-window', 'index.html'));
     const coverDataURL = await imageToDataURL(process.env.OPENING_PREVIEW_COVER || fixturePath);
+    await sharp({
+      create: { width: 300, height: 300, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } }
+    }).composite([{
+      input: Buffer.from('<svg width="180" height="280"><rect width="180" height="280" rx="18" fill="#f414d2"/></svg>'),
+      left: 60,
+      top: 10
+    }]).png().toFile(promotionArtworkPath);
+    const printPromoImageDataURL = await imageToDataURL(promotionArtworkPath);
     const logoDataURL = await processLogo(fixturePath, [211, 193, 166]);
     const baseParams = {
       coverDataURL,
@@ -105,6 +115,15 @@ async function run() {
       `window.renderPromotionFrameToFile(${JSON.stringify({
         basePath: chapterOnePath,
         visibility: 1
+      })}, ${JSON.stringify(promotionFallbackPath)})`
+    );
+    await window.webContents.executeJavaScript(
+      `window.setRenderBaseParams(${JSON.stringify({ ...baseParams, printPromoImageDataURL })})`
+    );
+    await window.webContents.executeJavaScript(
+      `window.renderPromotionFrameToFile(${JSON.stringify({
+        basePath: chapterOnePath,
+        visibility: 1
       })}, ${JSON.stringify(promotionPath)})`
     );
     await window.webContents.executeJavaScript(
@@ -123,6 +142,7 @@ async function run() {
       openingPublishedPath,
       openingSitePath,
       promotionPath,
+      promotionFallbackPath,
       promotionOverlayPath,
       ...transitionPaths.map(item => item.path)
     ]) {
@@ -137,6 +157,20 @@ async function run() {
     }
     if (fs.readFileSync(chapterOnePath).equals(fs.readFileSync(promotionPath))) {
       throw new Error('Print promotion frame did not differ from its base chapter frame.');
+    }
+    if (fs.readFileSync(chapterOnePath).equals(fs.readFileSync(promotionFallbackPath))) {
+      throw new Error('Print promotion cover fallback did not differ from its base chapter frame.');
+    }
+    if (fs.readFileSync(promotionPath).equals(fs.readFileSync(promotionFallbackPath))) {
+      throw new Error('Custom print-promotion artwork did not replace the main cover.');
+    }
+    const promotionPixel = await sharp(promotionPath)
+      .extract({ left: 897, top: 937, width: 1, height: 1 })
+      .removeAlpha()
+      .raw()
+      .toBuffer();
+    if (promotionPixel[0] < 225 || promotionPixel[1] > 45 || promotionPixel[2] < 190) {
+      throw new Error(`Custom print-promotion PNG was not used: ${Array.from(promotionPixel)}`);
     }
     if (fs.readFileSync(openingTitlePath).equals(fs.readFileSync(openingAuthorPath))) {
       throw new Error('Distinct opening title cards produced identical PNG files.');

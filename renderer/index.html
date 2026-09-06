@@ -261,14 +261,26 @@
       <div class="panel-section">
         <div class="section-header-toggle">
           <h3 class="section-title">Print Edition Promotion</h3>
-          <label class="toggle-switch" title="Show a print and Kindle promotion 30 seconds into the audiobook">
+          <label class="toggle-switch" title="Show a print and Kindle promotion at 0:30 and about every two hours">
             <input type="checkbox" id="print-promo-toggle" checked>
             <span class="toggle-slider"></span>
           </label>
         </div>
         <p style="font-size:10.5px;color:var(--text-muted);line-height:1.45;margin-top:4px">
-          At 0:30, briefly shows the cover with “Kindle &amp; Paperback Editions” and directs viewers to the link in the description.
+          Shows “Kindle &amp; Paperback Editions” at 0:30, then for 8 seconds around each two-hour mark (randomly within 10 minutes). Repeats stay clear of the final minute and point viewers to the link in the description.
         </p>
+        <div class="file-input-row" style="margin-top:10px">
+          <label class="file-label">Promotion Artwork <span class="optional">(optional PNG — uses cover if empty)</span></label>
+          <div class="file-picker" id="fp-print-promo-image">
+            <div class="fp-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4-4L5 21"/></svg>
+            </div>
+            <span class="fp-text" id="fp-print-promo-image-text">Using book cover</span>
+            <button class="fp-btn" id="btn-print-promo-image">Browse</button>
+            <button class="fp-btn fp-btn--clear" id="btn-print-promo-image-clear" style="display:none" title="Use the book cover instead">✕</button>
+          </div>
+        </div>
+        <p class="metadata-help" style="margin-top:6px">Transparent PNGs are supported, including 3D book mockups.</p>
       </div>
 
       <div class="panel-section">

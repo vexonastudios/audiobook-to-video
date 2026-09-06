@@ -519,11 +519,12 @@
     const visibility = Math.max(0, Math.min(1, params.visibility ?? 1));
     if (visibility <= 0) return;
 
-    const coverDataURL = params.coverDataURL || renderBaseParams.coverDataURL;
+    const customArtworkDataURL = params.printPromoImageDataURL || renderBaseParams.printPromoImageDataURL;
+    const artworkDataURL = customArtworkDataURL || params.coverDataURL || renderBaseParams.coverDataURL;
     const accentColor = params.accentColor || renderBaseParams.accentColor || [201, 169, 110];
-    if (!coverDataURL) return;
+    if (!artworkDataURL) return;
 
-    const coverImg = await loadImage(coverDataURL);
+    const artworkImg = await loadImage(artworkDataURL);
     const [ar, ag, ab] = accentColor;
     const eased = 1 - Math.pow(1 - visibility, 3);
     const cardX = 790;
@@ -532,7 +533,9 @@
     const cardH = 220;
     const thumbX = cardX + 28;
     const thumbY = cardY + 20;
-    const thumbW = 122;
+    // Give optional 3D mockups a wider stage while keeping ordinary portrait
+    // covers at their established size. contain-scaling preserves proportions.
+    const thumbW = customArtworkDataURL ? 160 : 122;
     const thumbH = 180;
 
     ctx.save();
@@ -564,11 +567,11 @@
     ctx.clip();
     ctx.fillStyle = '#090807';
     ctx.fillRect(thumbX, thumbY, thumbW, thumbH);
-    const coverScale = Math.min(thumbW / coverImg.naturalWidth, thumbH / coverImg.naturalHeight);
-    const coverW = coverImg.naturalWidth * coverScale;
-    const coverH = coverImg.naturalHeight * coverScale;
+    const coverScale = Math.min(thumbW / artworkImg.naturalWidth, thumbH / artworkImg.naturalHeight);
+    const coverW = artworkImg.naturalWidth * coverScale;
+    const coverH = artworkImg.naturalHeight * coverScale;
     ctx.drawImage(
-      coverImg,
+      artworkImg,
       thumbX + (thumbW - coverW) / 2,
       thumbY + (thumbH - coverH) / 2,
       coverW,
@@ -578,7 +581,7 @@
 
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    const textX = cardX + 184;
+    const textX = cardX + (customArtworkDataURL ? 220 : 184);
 
     ctx.font = '500 25px "EB Garamond"';
     ctx.fillStyle = `rgb(${ar}, ${ag}, ${ab})`;

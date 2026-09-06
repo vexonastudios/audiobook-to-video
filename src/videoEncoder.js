@@ -5,6 +5,7 @@ const { spawn } = require('child_process');
 const fluent = require('fluent-ffmpeg');
 const { resolveOpeningTitleSequence } = require('./openingTitles');
 const { buildChapterTimeline, transitionAlpha } = require('./chapterTimeline');
+const { resolvePrintPromotionSchedule, buildPrintPromotionOverlayFilter } = require('./printPromotion');
 let ffmpegPath = require('ffmpeg-static');
 let ffprobePath = require('@ffprobe-installer/ffprobe').path;
 
@@ -76,6 +77,7 @@ async function renderVideo(params, callbacks) {
     codec = 'h264',   // 'h264' = h264_nvenc/libx264 | 'h265' = hevc_nvenc/libx265
     fastAudioCopy = true,
     printPromoEnabled = true,
+    printPromoImageDataURL = null,
     printPromoStart = 30,
     printPromoDuration = 8,
     openingTitlesEnabled = false,
@@ -349,14 +351,15 @@ async function renderVideo(params, callbacks) {
     let videoForMux = mergedVideoPath;
     if (printPromoEnabled) {
       if (!renderPromotionOverlayToFile) throw new Error('Print promotion renderer callback is unavailable.');
-      const timing = resolveLegacyPrintPromotionTiming(totalDuration, printPromoStart, printPromoDuration);
-      if (timing) {
-        onLog(`\n📚 Adding print-edition lower third at ${formatSec(timing.start)}...`);
+      const schedule = resolvePrintPromotionSchedule(totalDuration, printPromoStart, printPromoDuration, wavPath);
+      if (schedule.length > 0) {
+        onLog(`\n📚 Adding ${schedule.length} print-edition promotion(s) at ${schedule.map(t => formatSec(t.start)).join(', ')}...`);
         onProgress({ phase: 'encoding', percent: 92, label: 'Adding print-edition promotion...' });
         const overlayPath = path.join(tmpDir, 'print_promotion_overlay.png');
         const promotedVideoPath = path.join(tmpDir, 'merged_video_with_promotion.mp4');
         await renderPromotionOverlayToFile({
           coverDataURL,
+          printPromoImageDataURL,
           accentColor,
           visibility: 1
         }, overlayPath);
@@ -364,8 +367,7 @@ async function renderVideo(params, callbacks) {
           videoPath: mergedVideoPath,
           overlayPath,
           outputPath: promotedVideoPath,
-          start: timing.start,
-          duration: timing.duration,
+          schedule,
           totalDuration,
           useGPU,
           codec,
@@ -833,35 +835,21 @@ function encodeOpeningTitleSequenceVideo({
   ], isCancelled);
 }
 
-function resolveLegacyPrintPromotionTiming(totalDuration, requestedStart, requestedDuration) {
-  if (!Number.isFinite(totalDuration) || !Number.isFinite(requestedStart)) return null;
-  const start = Math.max(0, requestedStart);
-  const availableDuration = totalDuration - start - 1;
-  if (availableDuration < 2) return null;
-  return {
-    start,
-    duration: Math.min(Math.max(2, requestedDuration), availableDuration)
-  };
-}
-
 function encodeLegacyPrintPromotion({
   videoPath,
   overlayPath,
   outputPath,
-  start,
-  duration,
+  schedule,
   totalDuration,
   useGPU,
   codec,
   crf,
   isCancelled
 }) {
-  const fadeDuration = Math.min(0.6, duration / 3);
-  const filter =
-    `[1:v]format=rgba,fade=t=in:st=0:d=${fadeDuration.toFixed(3)}:alpha=1,` +
-    `fade=t=out:st=${(duration - fadeDuration).toFixed(3)}:d=${fadeDuration.toFixed(3)}:alpha=1,` +
-    `setpts=PTS+${start.toFixed(6)}/TB[promo];` +
-    `[0:v][promo]overlay=0:0:eof_action=pass:shortest=0[vout]`;
+  const filter = buildPrintPromotionOverlayFilter(schedule);
+  const artworkInputs = schedule.flatMap(({ duration }) => [
+    '-loop', '1', '-framerate', String(OUTPUT_FPS), '-t', duration.toFixed(6), '-i', overlayPath
+  ]);
   const videoArgs = useGPU
     ? [
         '-c:v', codec === 'h265' ? 'hevc_nvenc' : 'h264_nvenc',
@@ -874,7 +862,7 @@ function encodeLegacyPrintPromotion({
 
   return runFFmpeg([
     '-i', videoPath,
-    '-loop', '1', '-framerate', String(OUTPUT_FPS), '-t', duration.toFixed(6), '-i', overlayPath,
+    ...artworkInputs,
     '-filter_complex', filter,
     '-map', '[vout]', '-t', totalDuration.toFixed(6),
     ...videoArgs,

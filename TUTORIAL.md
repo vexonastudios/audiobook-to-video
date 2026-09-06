@@ -28,7 +28,9 @@ Example Format:
 - Use the **Preview** section's dropdown above the canvas to inspect every opening card and chapter layout.
 
 ## 5. Render Video
-Before rendering, leave **Print Edition Promotion** enabled if the book is also sold in print or Kindle format. At 0:30 of the audiobook, the video will briefly show the selected cover and direct viewers to the Amazon link in the description. Turn it off for audiobook-only titles.
+Before rendering, leave **Print Edition Promotion** enabled if the book is also sold in print or Kindle format. At 0:30 of the audiobook, the video will briefly show the book and direct viewers to the Amazon link in the description. It uses the main cover by default; optionally choose a separate PNG—such as a transparent 3D book mockup—under **Promotion Artwork**. Clear that selection at any time to return to the main cover. Turn the promotion off for audiobook-only titles.
+
+For longer books, the same promotion repeats for eight seconds around the 2-hour, 4-hour, 6-hour marks, and so on, randomly within ten minutes of each mark. The number of repeats follows the audiobook's length; books under two hours only get the first appearance. Repeats finish before the final minute. Locations stay consistent when rendering the same audio file again, and the render log lists their times. Switching off **Print Edition Promotion** disables every appearance.
 
 Once your fields are filled and chapters are parsed, click **Render Video**. The optimized renderer stores one high-resolution still per chapter, creates additional artwork only for transitions, intros, or the short promotional card, and then builds a broadly compatible constant-30fps video. Compatible compressed audio is copied directly, while other audio is cached after its first conversion. You can track progress in the log box at the bottom.
 

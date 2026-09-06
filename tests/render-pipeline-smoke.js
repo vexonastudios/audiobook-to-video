@@ -27,11 +27,13 @@ async function runScenario({
   transitionStyle, codec = 'h264', expectedAudioCodec = 'aac',
   openingTitlesEnabled = false, openingTitles = null,
   chapterSplit = 3, expectedOpeningStills = 2, totalDuration = 6,
-  openingFixtures = null, checkpoints = [], expectedTransitionFrames = null
+  openingFixtures = null, checkpoints = [], expectedTransitionFrames = null,
+  printPromoImageDataURL = null
 }) {
   const outputPath = path.join(root, `${name}.mp4`);
   let openingFramesRendered = 0;
   let transitionFramesRendered = 0;
+  let preparedParams;
   let detectedEncoder;
   const renderResult = await renderVideo({
     coverDataURL: 'smoke-test-fixture',
@@ -54,12 +56,13 @@ async function runScenario({
     openingTitlesEnabled,
     openingTitles: openingTitlesEnabled ? (openingTitles || { title: 'Smoke Test Book' }) : {},
     fastAudioCopy: true,
+    printPromoImageDataURL,
     audioCacheDir: path.join(root, 'audio-cache')
   }, {
     onProgress: () => {},
     onProfile: profile => { detectedEncoder = profile.encoder; },
     onLog: () => {},
-    prepareFrameRenderer: async () => true,
+    prepareFrameRenderer: async params => { preparedParams = params; return true; },
     renderFrameToFile: async (_, targetPath) => fs.copyFileSync(stillPath, targetPath),
     renderOpeningFrameToFile: async (params, targetPath) => {
       openingFramesRendered++;
@@ -113,6 +116,9 @@ async function runScenario({
   if (expectedTransitionFrames !== null && transitionFramesRendered !== expectedTransitionFrames) {
     throw new Error(`${name}: expected ${expectedTransitionFrames} transition frames, got ${transitionFramesRendered}`);
   }
+  if (printPromoImageDataURL && preparedParams?.printPromoImageDataURL !== printPromoImageDataURL) {
+    throw new Error(`${name}: custom promotion artwork was not forwarded to the optimized frame renderer`);
+  }
   run(ffmpegPath, ['-hide_banner', '-loglevel', 'error', '-i', outputPath, '-f', 'null', nullOutput]);
   run(ffmpegPath, [
     '-hide_banner', '-loglevel', 'error', '-ss', String(expectedDuration * 0.75),
@@ -164,7 +170,8 @@ async function main() {
     results.push(await runScenario({
       name: 'default-cut-one-frame-final-chapter', root, stillPath, wavPath, introPath,
       introStyle: null, expectedDuration: 6, chapterSplit: 6 - 1 / 30,
-      expectedTransitionFrames: 0
+      expectedTransitionFrames: 0,
+      printPromoImageDataURL: 'data:image/png;base64,cHJvbW90aW9uLWFydHdvcms='
     }));
     results.push(await runScenario({
       name: 'transition', root, stillPath, wavPath, introPath,

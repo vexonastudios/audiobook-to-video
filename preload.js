@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // File dialogs
   pickCover: () => ipcRenderer.invoke('pick-cover'),
+  pickPrintPromoImage: () => ipcRenderer.invoke('pick-print-promo-image'),
   pickBackground: () => ipcRenderer.invoke('pick-background'),
   pickWav: () => ipcRenderer.invoke('pick-wav'),
   pickLogo: () => ipcRenderer.invoke('pick-logo'),

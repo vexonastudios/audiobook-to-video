@@ -159,6 +159,15 @@ ipcMain.handle('pick-cover', async () => {
   return result.filePaths[0] || null;
 });
 
+ipcMain.handle('pick-print-promo-image', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Select Print Promotion Artwork',
+    filters: [{ name: 'PNG Image', extensions: ['png'] }],
+    properties: ['openFile']
+  });
+  return result.filePaths[0] || null;
+});
+
 ipcMain.handle('pick-background', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Select Background Image (optional)',

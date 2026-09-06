@@ -57,6 +57,8 @@ const state = {
   codec: 'h264',             // 'h264' | 'h265'
   fastAudioCopy: true,
   printPromoEnabled: true,
+  printPromoImagePath: null,
+  printPromoImageDataURL: null,
   openingTitlesEnabled: false,
   openingTitles: {
     presentationLabel: 'AUDIOBOOK PRESENTATION',
@@ -130,6 +132,10 @@ const els = {
   introFadeSlider: $('intro-fade-slider'),
   introFadeVal: $('intro-fade-val'),
   printPromoToggle: $('print-promo-toggle'),
+  fpPrintPromoImage: $('fp-print-promo-image'),
+  fpPrintPromoImageText: $('fp-print-promo-image-text'),
+  btnPrintPromoImage: $('btn-print-promo-image'),
+  btnPrintPromoImageClear: $('btn-print-promo-image-clear'),
 
   // Opening title sequence
   openingTitlesToggle: $('opening-titles-toggle'),
@@ -281,6 +287,8 @@ els.btnNewProject.addEventListener('click', () => {
       isRendering: false,
       fastAudioCopy: true,
       printPromoEnabled: true,
+      printPromoImagePath: null,
+      printPromoImageDataURL: null,
       openingTitlesEnabled: false,
       openingTitles: {
         presentationLabel: 'AUDIOBOOK PRESENTATION',
@@ -341,6 +349,9 @@ els.btnNewProject.addEventListener('click', () => {
     els.introFadeVal.textContent = '1.0s';
     els.fastAudioToggle.checked = true;
     els.printPromoToggle.checked = true;
+    els.fpPrintPromoImageText.textContent = 'Using book cover';
+    els.fpPrintPromoImage.classList.remove('has-file');
+    els.btnPrintPromoImageClear.style.display = 'none';
     els.openingTitlesToggle.checked = false;
     els.openingTitlesSettings.style.display = 'none';
     els.openingPresentationLabelInput.value = 'AUDIOBOOK PRESENTATION';
@@ -394,6 +405,7 @@ els.btnSaveProject.addEventListener('click', async () => {
     transitionStyle: state.transitionStyle,
     transitionDuration: state.transitionDuration,
     printPromoEnabled: state.printPromoEnabled,
+    printPromoImagePath: state.printPromoImagePath,
     openingTitlesEnabled: state.openingTitlesEnabled,
     openingTitles: { ...state.openingTitles }
   };
@@ -545,6 +557,32 @@ els.btnBgClear.addEventListener('click', async () => {
   els.btnBgClear.style.display = 'none';
   saveSession();
   await refreshPreview();
+});
+
+els.btnPrintPromoImage.addEventListener('click', async () => {
+  const filePath = await window.api.pickPrintPromoImage();
+  if (!filePath) return;
+  try {
+    const dataURL = await window.api.imageToDataURL(filePath);
+    if (!dataURL) throw new Error('The selected PNG could not be loaded.');
+    state.printPromoImagePath = filePath;
+    state.printPromoImageDataURL = dataURL;
+    setFilePicked(els.fpPrintPromoImage, els.fpPrintPromoImageText, filePath);
+    els.btnPrintPromoImageClear.style.display = 'inline-flex';
+    saveSession();
+    addLog('📚 Custom print-promotion artwork selected.', 'ok');
+  } catch (error) {
+    addLog(`⚠ Could not load promotion artwork: ${error.message}`, 'err');
+  }
+});
+
+els.btnPrintPromoImageClear.addEventListener('click', () => {
+  state.printPromoImagePath = null;
+  state.printPromoImageDataURL = null;
+  els.fpPrintPromoImageText.textContent = 'Using book cover';
+  els.fpPrintPromoImage.classList.remove('has-file');
+  els.btnPrintPromoImageClear.style.display = 'none';
+  saveSession();
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -1569,6 +1607,7 @@ function buildRenderParams(chapter, openingPreviewCard = null) {
     nextChapter: null,
     accentColor: state.accentColor,
     logoDataURL: state.logoProcessedDataURL || state.logoDataURL || null,
+    printPromoImageDataURL: state.printPromoImageDataURL,
     transitionStyle: state.transitionStyle,
     transitionDuration: state.transitionDuration,
     titleFontSize: state.titleFontSize,  // 0 = auto, >0 = fixed px
@@ -1629,6 +1668,7 @@ async function beginRender() {
     codec: state.codec,
     fastAudioCopy: state.fastAudioCopy,
     printPromoEnabled: state.printPromoEnabled,
+    printPromoImageDataURL: state.printPromoImageDataURL,
     openingTitlesEnabled: state.openingTitlesEnabled,
     openingTitles: { ...state.openingTitles },
     forceLegacyRender: state.compatibilityMode,
@@ -1920,6 +1960,7 @@ function saveSession() {
     introDurationRaw: state.introDurationRaw,
     fastAudioCopy: state.fastAudioCopy,
     printPromoEnabled: state.printPromoEnabled,
+    printPromoImagePath: state.printPromoImagePath,
     openingTitlesEnabled: state.openingTitlesEnabled,
     openingTitles: { ...state.openingTitles },
     compatibilityMode: state.compatibilityMode,
@@ -1939,6 +1980,11 @@ async function restoreSession() {
   // project's selection. Explicitly saved transitions are preserved below.
   state.transitionStyle = 'cut';
   els.transitionSelect.value = 'cut';
+  state.printPromoImagePath = null;
+  state.printPromoImageDataURL = null;
+  els.fpPrintPromoImageText.textContent = 'Using book cover';
+  els.fpPrintPromoImage.classList.remove('has-file');
+  els.btnPrintPromoImageClear.style.display = 'none';
   if (stored0) {
     try {
       const d0 = JSON.parse(stored0);
@@ -2119,6 +2165,19 @@ async function restoreSession() {
         els.btnBgClear.style.display = 'inline-flex';
         previewNeeded = true;
       } catch(e) {}
+    }
+
+    if (data.printPromoImagePath) {
+      try {
+        const dataURL = await window.api.imageToDataURL(data.printPromoImagePath);
+        if (!dataURL) throw new Error('Promotion artwork was unavailable.');
+        state.printPromoImagePath = data.printPromoImagePath;
+        state.printPromoImageDataURL = dataURL;
+        setFilePicked(els.fpPrintPromoImage, els.fpPrintPromoImageText, data.printPromoImagePath);
+        els.btnPrintPromoImageClear.style.display = 'inline-flex';
+      } catch (error) {
+        addLog('⚠ Saved promotion artwork was not found; using the book cover.', 'err');
+      }
     }
     
     if (data.logoPath) {

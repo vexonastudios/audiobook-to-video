@@ -6,6 +6,7 @@ const { spawn } = require('child_process');
 const fluent = require('fluent-ffmpeg');
 const { resolveOpeningTitleSequence } = require('./openingTitles');
 const { buildChapterTimeline, transitionAlpha } = require('./chapterTimeline');
+const { resolvePrintPromotionSchedule } = require('./printPromotion');
 
 let ffmpegPath = require('ffmpeg-static');
 let ffprobePath = require('@ffprobe-installer/ffprobe').path;
@@ -53,6 +54,7 @@ async function renderVideo(params, callbacks) {
     codec = 'h264',
     fastAudioCopy = true,
     printPromoEnabled = true,
+    printPromoImageDataURL = null,
     printPromoStart = 30,
     printPromoDuration = 8,
     openingTitlesEnabled = false,
@@ -146,6 +148,7 @@ async function renderVideo(params, callbacks) {
       bgOffsetY,
       accentColor,
       logoDataURL,
+      printPromoImageDataURL,
       coverBorderWidth,
       titleFontSize
     });
@@ -277,40 +280,19 @@ async function renderVideo(params, callbacks) {
 
     if (printPromoEnabled) {
       timelineEntries = await timed('Print promotion rendering', async () => {
-        const timing = resolvePrintPromotionTiming(totalDuration, printPromoStart, printPromoDuration);
-        if (!timing) {
+        const schedule = resolvePrintPromotionSchedule(totalDuration, printPromoStart, printPromoDuration, wavPath);
+        if (schedule.length === 0) {
           onLog('⚠ Print promotion skipped because the audiobook is too short.');
           return timelineEntries;
         }
 
         const promotionDir = path.join(tmpDir, 'print_promotion');
         fs.mkdirSync(promotionDir, { recursive: true });
-        const samplePlan = buildPromotionSamplePlan(timelineEntries, timing.start, timing.duration);
-        const promotionEntries = [];
-        onLog(`\n📚 Rendering print-edition lower third at ${formatTimestamp(timing.start)} (${timing.duration.toFixed(1)}s)...`);
-
-        for (let i = 0; i < samplePlan.length; i++) {
-          if (cancelled()) throw new Error('RENDER_CANCELLED');
-          const sample = samplePlan[i];
-          const framePath = path.join(promotionDir, `promo_${String(i).padStart(4, '0')}.png`);
-          await renderPromotionFrameToFile({
-            basePath: sample.basePath,
-            visibility: sample.visibility
-          }, framePath);
-          promotionEntries.push({
-            path: framePath,
-            duration: sample.duration,
-            kind: 'promotion'
-          });
-          reportProgress(28 + ((i + 1) / samplePlan.length) * 4, `Rendered promotion frame ${i + 1} / ${samplePlan.length}`);
-        }
-
-        return replaceTimelineRange(
-          timelineEntries,
-          timing.start,
-          timing.start + timing.duration,
-          promotionEntries
-        );
+        return renderPrintPromotionTimeline({
+          entries: timelineEntries, schedule, outputDir: promotionDir,
+          renderPromotionFrameToFile, isCancelled: cancelled, onLog,
+          onProgress: fraction => reportProgress(28 + fraction * 4, 'Rendering print-edition promotions...')
+        });
       });
     }
 
@@ -502,15 +484,24 @@ function trimTimelineEntries(entries, trimSeconds) {
   return result;
 }
 
-function resolvePrintPromotionTiming(totalDuration, requestedStart = 30, requestedDuration = 8) {
-  if (!Number.isFinite(totalDuration) || !Number.isFinite(requestedStart)) return null;
-  const start = Math.max(0, requestedStart);
-  const availableDuration = totalDuration - start - 1;
-  if (availableDuration < 2) return null;
-  return {
-    start,
-    duration: Math.min(Math.max(2, requestedDuration), availableDuration)
-  };
+async function renderPrintPromotionTimeline({
+  entries, schedule, outputDir, renderPromotionFrameToFile, isCancelled, onLog, onProgress
+}) {
+  for (const [occurrence, timing] of schedule.entries()) {
+    if (isCancelled()) throw new Error('RENDER_CANCELLED');
+    const samplePlan = buildPromotionSamplePlan(entries, timing.start, timing.duration);
+    const promotionEntries = [];
+    onLog(`\n📚 Rendering print-edition promotion ${occurrence + 1}/${schedule.length} at ${formatTimestamp(timing.start)} (${timing.duration.toFixed(1)}s)...`);
+    for (const [i, sample] of samplePlan.entries()) {
+      if (isCancelled()) throw new Error('RENDER_CANCELLED');
+      const framePath = path.join(outputDir, `promo_${occurrence}_${String(i).padStart(4, '0')}.png`);
+      await renderPromotionFrameToFile({ basePath: sample.basePath, visibility: sample.visibility }, framePath);
+      promotionEntries.push({ path: framePath, duration: sample.duration, kind: 'promotion' });
+      onProgress((occurrence + (i + 1) / samplePlan.length) / schedule.length);
+    }
+    entries = replaceTimelineRange(entries, timing.start, timing.start + timing.duration, promotionEntries);
+  }
+  return entries;
 }
 
 function buildPromotionSamplePlan(entries, start, duration) {
@@ -1271,8 +1262,10 @@ function formatElapsed(seconds) {
 
 function formatTimestamp(seconds) {
   const whole = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(whole / 3600);
   const minutes = Math.floor(whole / 60);
   const remainder = whole % 60;
+  if (hours > 0) return `${hours}:${String(minutes % 60).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
   return `${minutes}:${String(remainder).padStart(2, '0')}`;
 }
 
@@ -1281,4 +1274,4 @@ function formatBytes(bytes) {
   return `${Math.round(bytes / 1024 ** 2)} MB`;
 }
 
-module.exports = { renderVideo };
+module.exports = { renderVideo, renderPrintPromotionTimeline };

@@ -30,6 +30,12 @@ async function runTest() {
     await frameWindow.loadFile(path.join(projectRoot, 'frame-window', 'index.html'));
     const fixturePath = path.join(projectRoot, 'logo-audiobook-generator.png');
     const coverDataURL = await imageToDataURL(fixturePath);
+    const promotionArtworkPath = path.join(root, 'promotion-artwork.png');
+    await sharp({ create: {
+      width: 300, height: 300, channels: 4,
+      background: { r: 244, g: 20, b: 210, alpha: 0.85 }
+    } }).png().toFile(promotionArtworkPath);
+    const printPromoImageDataURL = await imageToDataURL(promotionArtworkPath);
     const audioPath = path.join(root, 'audio.mp3');
     const outputPath = path.join(root, 'legacy-promotion.mp4');
     run(ffmpegPath, [
@@ -40,6 +46,7 @@ async function runTest() {
 
     const execute = expression => frameWindow.webContents.executeJavaScript(expression);
     let openingFramesRendered = 0;
+    let promotionArtworkForwarded = false;
     await renderVideoLegacy({
       coverDataURL,
       bgDataURL: coverDataURL,
@@ -64,6 +71,7 @@ async function runTest() {
         site: 'scrollreader.com'
       },
       printPromoEnabled: true,
+      printPromoImageDataURL,
       printPromoStart: 1,
       printPromoDuration: 2
     }, {
@@ -74,9 +82,10 @@ async function runTest() {
         openingFramesRendered++;
         return execute(`window.renderOpeningFrameToFile(${JSON.stringify(params)}, ${JSON.stringify(targetPath)})`);
       },
-      renderPromotionOverlayToFile: (params, targetPath) => execute(
-        `window.renderPromotionOverlayToFile(${JSON.stringify(params)}, ${JSON.stringify(targetPath)})`
-      ),
+      renderPromotionOverlayToFile: (params, targetPath) => {
+        promotionArtworkForwarded = params.printPromoImageDataURL === printPromoImageDataURL;
+        return execute(`window.renderPromotionOverlayToFile(${JSON.stringify(params)}, ${JSON.stringify(targetPath)})`);
+      },
       isCancelled: () => false
     });
 
@@ -91,6 +100,9 @@ async function runTest() {
     }
     if (openingFramesRendered !== 7) {
       throw new Error(`Legacy opening titles expected 7 rendered stills including the title-only state, got ${openingFramesRendered}`);
+    }
+    if (!promotionArtworkForwarded) {
+      throw new Error('Custom promotion artwork was not forwarded to Compatibility Mode.');
     }
 
     const beforePath = path.join(root, 'before.png');

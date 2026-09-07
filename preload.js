@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // Image utilities
   imageToDataURL: (filePath) => ipcRenderer.invoke('image-to-dataurl', filePath),
+  prepareCoverImage: (filePath) => ipcRenderer.invoke('prepare-cover-image', filePath),
   extractColor: (imagePath) => ipcRenderer.invoke('extract-color', imagePath),
   processLogo: (opts) => ipcRenderer.invoke('process-logo', opts),
 

@@ -8,7 +8,7 @@ Built on Electron and powered by FFmpeg, it features hardware-accelerated render
 
 ## ✨ Features
 
-- **Quick Setup:** Load your Audiobook audio file (WAV/MP3), a cover image, and an optional background image or brand logo.
+- **Quick Setup:** Load your Audiobook audio file (WAV/MP3), a cover image, and an optional background image or brand logo. Transparent padding around PNG cover artwork is removed automatically, so 3D mockups fill the cover area without manual editing.
 - **Auto-Chapters:** Paste your YouTube chapter timestamps directly into the app. It automatically parses them and creates visual chapter transitions in the final video.
 - **Customizable Transitions:** Cut is the default. Optional Fade to Black, Cross Dissolve, Lens Flare Burn, and Zoom Blur Push straddle the chapter markers and automatically shorten around short chapters, without shifting later chapters or audio.
 - **Video Intros:** Easily prepend an MP4 video intro with options to include audio, hard-cut, or smooth-fade into the audiobook.

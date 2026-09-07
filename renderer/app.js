@@ -547,8 +547,13 @@ els.btnCover.addEventListener('click', async () => {
   state.coverPath = filePath;
   setFilePicked(els.fpCover, els.fpCoverText, filePath);
 
-  // Load as data URL
-  state.coverDataURL = await window.api.imageToDataURL(filePath);
+  // Transparent PNG mockups often contain a large empty canvas. Crop that
+  // padding once so every preview and rendered frame fits the visible book.
+  const preparedCover = await window.api.prepareCoverImage(filePath);
+  state.coverDataURL = preparedCover?.dataURL || await window.api.imageToDataURL(filePath);
+  if (preparedCover?.wasTrimmed) {
+    addLog(`✂ Transparent cover padding removed (${preparedCover.originalWidth}×${preparedCover.originalHeight} → ${preparedCover.width}×${preparedCover.height}).`, 'ok');
+  }
 
   // Extract accent color if NOT set to custom
   if (!state.isCustomColor) {
@@ -2295,7 +2300,8 @@ async function restoreSession() {
       try {
         state.coverPath = data.coverPath;
         setFilePicked(els.fpCover, els.fpCoverText, data.coverPath);
-        state.coverDataURL = await window.api.imageToDataURL(data.coverPath);
+        const preparedCover = await window.api.prepareCoverImage(data.coverPath);
+        state.coverDataURL = preparedCover?.dataURL || await window.api.imageToDataURL(data.coverPath);
         if (state.coverDataURL) {
           // Only auto-extract if it isn't a custom color passed by the session
           if (!state.isCustomColor) {

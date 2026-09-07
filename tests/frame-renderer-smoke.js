@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const sharp = require('sharp');
-const { imageToDataURL, processLogo } = require('../src/logoProcessor');
+const { imageToDataURL, prepareCoverImage, processLogo } = require('../src/logoProcessor');
 const { buildOpeningTitleCards } = require('../src/openingTitles');
 
 async function run() {
@@ -14,6 +14,9 @@ async function run() {
 
   const chapterOnePath = path.join(outputDir, 'chapter-one.png');
   const chapterTwoPath = path.join(outputDir, 'chapter-two.png');
+  const trimmedCoverFramePath = path.join(outputDir, 'trimmed-cover-frame.png');
+  const transparentPaddedCoverPath = path.join(outputDir, 'transparent-padded-cover.png');
+  const opaqueCoverPath = path.join(outputDir, 'opaque-cover.png');
   const promotionPath = path.join(outputDir, 'print-promotion.png');
   const promotionFallbackPath = path.join(outputDir, 'print-promotion-cover-fallback.png');
   const promotionOverlayPath = path.join(outputDir, 'print-promotion-overlay.png');
@@ -48,6 +51,26 @@ async function run() {
 
   try {
     await window.loadFile(path.join(projectRoot, 'frame-window', 'index.html'));
+    await sharp({
+      create: { width: 900, height: 900, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } }
+    }).composite([{
+      input: Buffer.from('<svg width="300" height="700"><rect width="300" height="700" fill="#00f5d4"/></svg>'),
+      left: 300,
+      top: 100
+    }]).png().toFile(transparentPaddedCoverPath);
+    const preparedTransparentCover = await prepareCoverImage(transparentPaddedCoverPath);
+    const preparedTransparentMetadata = await sharp(Buffer.from(preparedTransparentCover.dataURL.split(',')[1], 'base64')).metadata();
+    if (!preparedTransparentCover.wasTrimmed || preparedTransparentMetadata.width !== 300
+      || preparedTransparentMetadata.height !== 700) {
+      throw new Error(`Transparent cover padding was not removed: ${JSON.stringify(preparedTransparentCover)}`);
+    }
+    await sharp({
+      create: { width: 400, height: 600, channels: 4, background: { r: 40, g: 60, b: 80, alpha: 1 } }
+    }).png().toFile(opaqueCoverPath);
+    const preparedOpaqueCover = await prepareCoverImage(opaqueCoverPath);
+    if (preparedOpaqueCover.wasTrimmed || preparedOpaqueCover.width !== 400 || preparedOpaqueCover.height !== 600) {
+      throw new Error('An ordinary opaque cover was cropped unexpectedly.');
+    }
     const coverDataURL = await imageToDataURL(process.env.OPENING_PREVIEW_COVER || fixturePath);
     await sharp({
       create: { width: 300, height: 300, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } }
@@ -94,6 +117,21 @@ async function run() {
       `window.renderFrameToFile(${JSON.stringify({
         chapter: { number: 2, title: 'Timestamped Timeline', isNumbered: true }
       })}, ${JSON.stringify(chapterTwoPath)})`
+    );
+    await window.webContents.executeJavaScript(
+      `window.setRenderBaseParams(${JSON.stringify({
+        ...baseParams,
+        coverDataURL: preparedTransparentCover.dataURL,
+        bgDataURL: preparedTransparentCover.dataURL
+      })})`
+    );
+    await window.webContents.executeJavaScript(
+      `window.renderFrameToFile(${JSON.stringify({
+        chapter: { number: 1, title: 'Auto-cropped Cover', isNumbered: true }
+      })}, ${JSON.stringify(trimmedCoverFramePath)})`
+    );
+    await window.webContents.executeJavaScript(
+      `window.setRenderBaseParams(${JSON.stringify(baseParams)})`
     );
     const openingCards = buildOpeningTitleCards({
       presentationLabel: 'SCROLL READER PRESENTS',
@@ -172,6 +210,7 @@ async function run() {
     for (const outputPath of [
       chapterOnePath,
       chapterTwoPath,
+      trimmedCoverFramePath,
       openingBlankPath,
       openingTitlePath,
       openingTitleOnlyPath,
@@ -196,6 +235,11 @@ async function run() {
 
     if (fs.readFileSync(chapterOnePath).equals(fs.readFileSync(chapterTwoPath))) {
       throw new Error('Distinct chapter parameters produced identical PNG files.');
+    }
+    const trimmedCoverPixel = await sharp(trimmedCoverFramePath)
+      .extract({ left: 402, top: 70, width: 1, height: 1 }).removeAlpha().raw().toBuffer();
+    if (trimmedCoverPixel[0] > 40 || trimmedCoverPixel[1] < 220 || trimmedCoverPixel[2] < 180) {
+      throw new Error(`Visible cover artwork did not fill the cover stage after trimming: ${Array.from(trimmedCoverPixel)}`);
     }
     if (fs.readFileSync(chapterOnePath).equals(fs.readFileSync(promotionPath))) {
       throw new Error('Print promotion frame did not differ from its base chapter frame.');

@@ -285,6 +285,16 @@ ipcMain.handle('image-to-dataurl', async (event, filePath) => {
   }
 });
 
+ipcMain.handle('prepare-cover-image', async (event, filePath) => {
+  try {
+    const { prepareCoverImage } = require('./src/logoProcessor');
+    return await prepareCoverImage(filePath);
+  } catch (e) {
+    console.error('prepare-cover-image error:', e);
+    return null;
+  }
+});
+
 // ─────────────────────────────────────────────
 // IPC: Color Extraction
 // ─────────────────────────────────────────────

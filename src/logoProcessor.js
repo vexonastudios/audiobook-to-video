@@ -93,4 +93,48 @@ async function imageToDataURL(filePath) {
   return `data:${mime};base64,${buffer.toString('base64')}`;
 }
 
-module.exports = { processLogo, imageToDataURL };
+/**
+ * Removes transparent outer padding from a cover image once at import time.
+ * Opaque JPEGs and rectangular PNG covers are returned byte-for-byte so this
+ * cannot accidentally crop a cover whose artwork intentionally reaches its
+ * canvas edges.
+ */
+async function prepareCoverImage(filePath) {
+  const metadata = await sharp(filePath).metadata();
+  const originalWidth = metadata.width || 0;
+  const originalHeight = metadata.height || 0;
+  const unchanged = async () => ({
+    dataURL: await imageToDataURL(filePath),
+    wasTrimmed: false,
+    originalWidth,
+    originalHeight,
+    width: originalWidth,
+    height: originalHeight
+  });
+
+  if (!metadata.hasAlpha || !originalWidth || !originalHeight) return unchanged();
+
+  try {
+    const { data, info } = await sharp(filePath)
+      .trim({ background: { r: 0, g: 0, b: 0, alpha: 0 }, threshold: 2 })
+      .png()
+      .toBuffer({ resolveWithObject: true });
+    const wasTrimmed = info.width < originalWidth || info.height < originalHeight;
+    if (!wasTrimmed) return unchanged();
+
+    return {
+      dataURL: `data:image/png;base64,${data.toString('base64')}`,
+      wasTrimmed: true,
+      originalWidth,
+      originalHeight,
+      width: info.width,
+      height: info.height
+    };
+  } catch (_) {
+    // A fully transparent or unusual image should still load normally and let
+    // the existing renderer provide its standard preview/error behavior.
+    return unchanged();
+  }
+}
+
+module.exports = { processLogo, imageToDataURL, prepareCoverImage };

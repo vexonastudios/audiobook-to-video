@@ -221,6 +221,45 @@
     ctx.closePath();
   }
 
+  function drawAuthorPortrait(ctx, image, centerX, centerY, radius, accentColor, crop = {}) {
+    const [ar, ag, ab] = accentColor;
+    const innerRadius = radius - 4;
+    const positionX = Math.min(100, Math.max(0, Number(crop.positionX) || 0)) / 100;
+    const positionY = Math.min(100, Math.max(0, Number(crop.positionY) || 0)) / 100;
+    const zoom = Math.min(2.5, Math.max(1, Number(crop.zoom) || 1));
+    const sourceSide = Math.min(image.naturalWidth, image.naturalHeight) / zoom;
+    const sourceX = (image.naturalWidth - sourceSide) * positionX;
+    const sourceY = (image.naturalHeight - sourceSide) * positionY;
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.52)';
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = `rgba(${ar},${ag},${ab},0.92)`;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, innerRadius, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(
+      image,
+      sourceX, sourceY, sourceSide, sourceSide,
+      centerX - innerRadius, centerY - innerRadius, innerRadius * 2, innerRadius * 2
+    );
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.62)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, innerRadius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function drawChapterText(ctx, params, opacity = 1, offsetY = 0) {
     const {
       chapter,
@@ -317,6 +356,7 @@
     const textAreaX = 520;
     const textAreaW = W - textAreaX - 40;
     const centerX = textAreaX + textAreaW / 2;
+    const authorPortrait = card.type === 'author' ? params.authorPhotoImage : null;
 
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
@@ -325,9 +365,9 @@
     ctx.textAlign = 'center';
 
     ctx.fillStyle = accentCSS;
-    drawTrackedToFit(ctx, card.label, centerX, 245, textAreaW - 80);
+    drawTrackedToFit(ctx, card.label, centerX, authorPortrait ? 175 : 245, textAreaW - 80);
 
-    const lineY = 277;
+    const lineY = authorPortrait ? 207 : 277;
     const lineW = 136;
     ctx.strokeStyle = `rgba(${ar},${ag},${ab},0.58)`;
     ctx.lineWidth = 1;
@@ -339,6 +379,23 @@
     ctx.beginPath();
     ctx.arc(centerX, lineY, 2.4, 0, Math.PI * 2);
     ctx.fill();
+
+    if (authorPortrait) {
+      drawAuthorPortrait(ctx, authorPortrait, centerX, 315, 76, [ar, ag, ab], {
+        positionX: params.authorPhotoPositionX ?? 50,
+        positionY: params.authorPhotoPositionY ?? 35,
+        zoom: params.authorPhotoZoom ?? 1
+      });
+      const fitted = fitText(ctx, card.primary, 'EB Garamond', 56, 30, textAreaW - 80, 130);
+      ctx.font = `400 ${fitted.fontSize}px "EB Garamond"`;
+      ctx.fillStyle = 'rgba(255,255,255,0.97)';
+      const lineH = fitted.fontSize * 1.16;
+      const blockHeight = fitted.lines.length * lineH;
+      const primaryY = 482 - blockHeight / 2 + lineH / 2;
+      fitted.lines.forEach((line, index) => ctx.fillText(line, centerX, primaryY + index * lineH));
+      ctx.restore();
+      return;
+    }
 
     if (card.type === 'site') {
       ctx.fillStyle = accentCSS;
@@ -489,7 +546,17 @@
 
     // ── 3. Right-side content ───────────────────────────────────
     if (params.openingBlank || params.openingPreviewCard || params.openingSequenceFrame) {
-      drawOpeningSequenceText(ctx, params);
+      let openingParams = params;
+      const frameUsesAuthor = params.openingPreviewCard?.type === 'author'
+        || params.openingSequenceFrame?.cards?.some(card => card.type === 'author');
+      if (frameUsesAuthor && params.authorPhotoDataURL) {
+        try {
+          openingParams = { ...params, authorPhotoImage: await loadImage(params.authorPhotoDataURL) };
+        } catch (_) {
+          // Missing/corrupt optional photos retain the existing text-only card.
+        }
+      }
+      drawOpeningSequenceText(ctx, openingParams);
     } else {
       drawChapterText(ctx, params);
     }

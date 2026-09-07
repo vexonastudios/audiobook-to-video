@@ -168,6 +168,15 @@ ipcMain.handle('pick-print-promo-image', async () => {
   return result.filePaths[0] || null;
 });
 
+ipcMain.handle('pick-author-photo', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Select Author Photo',
+    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+    properties: ['openFile']
+  });
+  return result.filePaths[0] || null;
+});
+
 ipcMain.handle('pick-background', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Select Background Image (optional)',

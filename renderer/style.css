@@ -291,6 +291,27 @@ html, body {
   line-height: 1.45;
 }
 
+.author-photo-crop-controls {
+  margin-top: 9px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-2) 78%, transparent);
+}
+
+.author-photo-crop-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.author-photo-crop-controls .slider-row { margin-bottom: 10px; }
+.author-photo-crop-controls .slider-label { margin-bottom: 5px; }
+
 .fp-btn {
   font-size: 10.5px;
   font-weight: 500;

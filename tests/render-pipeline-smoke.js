@@ -28,7 +28,8 @@ async function runScenario({
   openingTitlesEnabled = false, openingTitles = null,
   chapterSplit = 3, expectedOpeningStills = 2, totalDuration = 6,
   openingFixtures = null, checkpoints = [], expectedTransitionFrames = null,
-  printPromoImageDataURL = null
+  printPromoImageDataURL = null, authorPhotoDataURL = null,
+  authorPhotoPositionX = 50, authorPhotoPositionY = 35, authorPhotoZoom = 1
 }) {
   const outputPath = path.join(root, `${name}.mp4`);
   let openingFramesRendered = 0;
@@ -57,6 +58,10 @@ async function runScenario({
     openingTitles: openingTitlesEnabled ? (openingTitles || { title: 'Smoke Test Book' }) : {},
     fastAudioCopy: true,
     printPromoImageDataURL,
+    authorPhotoDataURL,
+    authorPhotoPositionX,
+    authorPhotoPositionY,
+    authorPhotoZoom,
     audioCacheDir: path.join(root, 'audio-cache')
   }, {
     onProgress: () => {},
@@ -119,6 +124,14 @@ async function runScenario({
   if (printPromoImageDataURL && preparedParams?.printPromoImageDataURL !== printPromoImageDataURL) {
     throw new Error(`${name}: custom promotion artwork was not forwarded to the optimized frame renderer`);
   }
+  if (authorPhotoDataURL && preparedParams?.authorPhotoDataURL !== authorPhotoDataURL) {
+    throw new Error(`${name}: author photo was not forwarded to the optimized frame renderer`);
+  }
+  if (authorPhotoDataURL && (preparedParams?.authorPhotoPositionX !== authorPhotoPositionX
+    || preparedParams?.authorPhotoPositionY !== authorPhotoPositionY
+    || preparedParams?.authorPhotoZoom !== authorPhotoZoom)) {
+    throw new Error(`${name}: author photo crop was not forwarded to the optimized frame renderer`);
+  }
   run(ffmpegPath, ['-hide_banner', '-loglevel', 'error', '-i', outputPath, '-f', 'null', nullOutput]);
   run(ffmpegPath, [
     '-hide_banner', '-loglevel', 'error', '-ss', String(expectedDuration * 0.75),
@@ -171,7 +184,11 @@ async function main() {
       name: 'default-cut-one-frame-final-chapter', root, stillPath, wavPath, introPath,
       introStyle: null, expectedDuration: 6, chapterSplit: 6 - 1 / 30,
       expectedTransitionFrames: 0,
-      printPromoImageDataURL: 'data:image/png;base64,cHJvbW90aW9uLWFydHdvcms='
+      printPromoImageDataURL: 'data:image/png;base64,cHJvbW90aW9uLWFydHdvcms=',
+      authorPhotoDataURL: 'data:image/png;base64,YXV0aG9yLXBob3Rv',
+      authorPhotoPositionX: 18,
+      authorPhotoPositionY: 72,
+      authorPhotoZoom: 1.65
     }));
     results.push(await runScenario({
       name: 'transition', root, stillPath, wavPath, introPath,

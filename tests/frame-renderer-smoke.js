@@ -24,6 +24,11 @@ async function run() {
   const openingSubtitleFadePath = path.join(outputDir, 'opening-subtitle-fade.png');
   const openingSeriesPath = path.join(outputDir, 'opening-series.png');
   const openingAuthorPath = path.join(outputDir, 'opening-author.png');
+  const openingAuthorNoPhotoPath = path.join(outputDir, 'opening-author-no-photo.png');
+  const openingAuthorCropTopLeftPath = path.join(outputDir, 'opening-author-crop-top-left.png');
+  const openingAuthorCropBottomRightPath = path.join(outputDir, 'opening-author-crop-bottom-right.png');
+  const authorPhotoPath = path.join(outputDir, 'author-photo.png');
+  const authorCropPhotoPath = path.join(outputDir, 'author-crop-photo.png');
   const openingPublishedPath = path.join(outputDir, 'opening-published.png');
   const openingSitePath = path.join(outputDir, 'opening-site.png');
   const transitionPaths = ['fade', 'dissolve', 'flare', 'zoom'].map(style => ({
@@ -52,6 +57,17 @@ async function run() {
       top: 10
     }]).png().toFile(promotionArtworkPath);
     const printPromoImageDataURL = await imageToDataURL(promotionArtworkPath);
+    await sharp({
+      create: { width: 240, height: 360, channels: 3, background: { r: 20, g: 230, b: 70 } }
+    }).png().toFile(authorPhotoPath);
+    const authorPhotoDataURL = await imageToDataURL(authorPhotoPath);
+    await sharp(Buffer.from(`<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
+      <rect width="200" height="200" fill="#f02020"/>
+      <rect x="200" width="200" height="200" fill="#20f020"/>
+      <rect y="200" width="200" height="200" fill="#2020f0"/>
+      <rect x="200" y="200" width="200" height="200" fill="#f0e020"/>
+    </svg>`)).png().toFile(authorCropPhotoPath);
+    const authorCropPhotoDataURL = await imageToDataURL(authorCropPhotoPath);
     const logoDataURL = await processLogo(fixturePath, [211, 193, 166]);
     const baseParams = {
       coverDataURL,
@@ -61,6 +77,7 @@ async function run() {
       bgOffsetY: 0,
       accentColor: [211, 193, 166],
       logoDataURL,
+      authorPhotoDataURL,
       coverBorderWidth: 0,
       titleFontSize: 54
     };
@@ -101,6 +118,28 @@ async function run() {
         })}, ${JSON.stringify(targetPath)})`
       );
     }
+    await window.webContents.executeJavaScript(
+      `window.renderOpeningFrameToFile(${JSON.stringify({
+        chapter: { number: null, title: 'Introduction', isNumbered: false },
+        openingPreviewCard: openingCards.find(card => card.type === 'author'),
+        authorPhotoDataURL: null
+      })}, ${JSON.stringify(openingAuthorNoPhotoPath)})`
+    );
+    for (const crop of [
+      { path: openingAuthorCropTopLeftPath, positionX: 0, positionY: 0 },
+      { path: openingAuthorCropBottomRightPath, positionX: 100, positionY: 100 }
+    ]) {
+      await window.webContents.executeJavaScript(
+        `window.renderOpeningFrameToFile(${JSON.stringify({
+          chapter: { number: null, title: 'Introduction', isNumbered: false },
+          openingPreviewCard: openingCards.find(card => card.type === 'author'),
+          authorPhotoDataURL: authorCropPhotoDataURL,
+          authorPhotoPositionX: crop.positionX,
+          authorPhotoPositionY: crop.positionY,
+          authorPhotoZoom: 2
+        })}, ${JSON.stringify(crop.path)})`
+      );
+    }
     for (const transition of transitionPaths) {
       await window.webContents.executeJavaScript(
         `window.renderTransitionFrameToFile(${JSON.stringify({
@@ -139,6 +178,9 @@ async function run() {
       openingSubtitleFadePath,
       openingSeriesPath,
       openingAuthorPath,
+      openingAuthorNoPhotoPath,
+      openingAuthorCropTopLeftPath,
+      openingAuthorCropBottomRightPath,
       openingPublishedPath,
       openingSitePath,
       promotionPath,
@@ -174,6 +216,27 @@ async function run() {
     }
     if (fs.readFileSync(openingTitlePath).equals(fs.readFileSync(openingAuthorPath))) {
       throw new Error('Distinct opening title cards produced identical PNG files.');
+    }
+    if (fs.readFileSync(openingAuthorPath).equals(fs.readFileSync(openingAuthorNoPhotoPath))) {
+      throw new Error('Author photo did not change the author opening card.');
+    }
+    const authorPhotoPixel = await sharp(openingAuthorPath)
+      .extract({ left: 1320, top: 473, width: 1, height: 1 })
+      .removeAlpha()
+      .raw()
+      .toBuffer();
+    if (authorPhotoPixel[0] > 60 || authorPhotoPixel[1] < 200 || authorPhotoPixel[2] > 100) {
+      throw new Error(`Circular author photo was not rendered above the author name: ${Array.from(authorPhotoPixel)}`);
+    }
+    const cropTopLeftPixel = await sharp(openingAuthorCropTopLeftPath)
+      .extract({ left: 1320, top: 473, width: 1, height: 1 }).removeAlpha().raw().toBuffer();
+    const cropBottomRightPixel = await sharp(openingAuthorCropBottomRightPath)
+      .extract({ left: 1320, top: 473, width: 1, height: 1 }).removeAlpha().raw().toBuffer();
+    if (cropTopLeftPixel[0] < 220 || cropTopLeftPixel[1] > 70 || cropTopLeftPixel[2] > 70) {
+      throw new Error(`Top-left author crop did not move to the requested focus: ${Array.from(cropTopLeftPixel)}`);
+    }
+    if (cropBottomRightPixel[0] < 220 || cropBottomRightPixel[1] < 200 || cropBottomRightPixel[2] > 70) {
+      throw new Error(`Bottom-right author crop did not move to the requested focus: ${Array.from(cropBottomRightPixel)}`);
     }
     if (fs.readFileSync(openingTitlePath).equals(fs.readFileSync(openingSeriesPath))) {
       throw new Error('Series card did not differ from the title card.');

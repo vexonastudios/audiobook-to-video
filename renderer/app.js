@@ -59,6 +59,11 @@ const state = {
   printPromoEnabled: true,
   printPromoImagePath: null,
   printPromoImageDataURL: null,
+  authorPhotoPath: null,
+  authorPhotoDataURL: null,
+  authorPhotoPositionX: 50,
+  authorPhotoPositionY: 35,
+  authorPhotoZoom: 1,
   openingTitlesEnabled: false,
   openingTitles: {
     presentationLabel: 'AUDIOBOOK PRESENTATION',
@@ -146,6 +151,18 @@ const els = {
   openingSeriesNameInput: $('opening-series-name-input'),
   openingBookNumberInput: $('opening-book-number-input'),
   openingAuthorInput: $('opening-author-input'),
+  fpAuthorPhoto: $('fp-author-photo'),
+  fpAuthorPhotoText: $('fp-author-photo-text'),
+  btnAuthorPhoto: $('btn-author-photo'),
+  btnAuthorPhotoClear: $('btn-author-photo-clear'),
+  authorPhotoCropControls: $('author-photo-crop-controls'),
+  authorPhotoPositionX: $('author-photo-position-x'),
+  authorPhotoPositionXVal: $('author-photo-position-x-val'),
+  authorPhotoPositionY: $('author-photo-position-y'),
+  authorPhotoPositionYVal: $('author-photo-position-y-val'),
+  authorPhotoZoom: $('author-photo-zoom'),
+  authorPhotoZoomVal: $('author-photo-zoom-val'),
+  btnAuthorPhotoCropReset: $('btn-author-photo-crop-reset'),
   openingPublishedInput: $('opening-published-input'),
   openingSiteInput: $('opening-site-input'),
 
@@ -289,6 +306,11 @@ els.btnNewProject.addEventListener('click', () => {
       printPromoEnabled: true,
       printPromoImagePath: null,
       printPromoImageDataURL: null,
+      authorPhotoPath: null,
+      authorPhotoDataURL: null,
+      authorPhotoPositionX: 50,
+      authorPhotoPositionY: 35,
+      authorPhotoZoom: 1,
       openingTitlesEnabled: false,
       openingTitles: {
         presentationLabel: 'AUDIOBOOK PRESENTATION',
@@ -352,6 +374,11 @@ els.btnNewProject.addEventListener('click', () => {
     els.fpPrintPromoImageText.textContent = 'Using book cover';
     els.fpPrintPromoImage.classList.remove('has-file');
     els.btnPrintPromoImageClear.style.display = 'none';
+    els.fpAuthorPhotoText.textContent = 'No author photo';
+    els.fpAuthorPhoto.classList.remove('has-file');
+    els.btnAuthorPhotoClear.style.display = 'none';
+    resetAuthorPhotoCrop();
+    els.authorPhotoCropControls.style.display = 'none';
     els.openingTitlesToggle.checked = false;
     els.openingTitlesSettings.style.display = 'none';
     els.openingPresentationLabelInput.value = 'AUDIOBOOK PRESENTATION';
@@ -406,6 +433,10 @@ els.btnSaveProject.addEventListener('click', async () => {
     transitionDuration: state.transitionDuration,
     printPromoEnabled: state.printPromoEnabled,
     printPromoImagePath: state.printPromoImagePath,
+    authorPhotoPath: state.authorPhotoPath,
+    authorPhotoPositionX: state.authorPhotoPositionX,
+    authorPhotoPositionY: state.authorPhotoPositionY,
+    authorPhotoZoom: state.authorPhotoZoom,
     openingTitlesEnabled: state.openingTitlesEnabled,
     openingTitles: { ...state.openingTitles }
   };
@@ -757,6 +788,100 @@ function syncOpeningTitlesFromInputs() {
     site: els.openingSiteInput.value
   };
 }
+
+function selectAuthorOpeningPreview() {
+  const authorIndex = getOpeningTitleCards().findIndex(card => card.type === 'author');
+  if (authorIndex < 0) return;
+  state.previewMode = 'opening';
+  state.openingPreviewCardIndex = authorIndex;
+}
+
+function clampAuthorPhotoCrop(value, min, max, fallback) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.min(max, Math.max(min, numeric)) : fallback;
+}
+
+function formatAuthorPhotoFocus(value, start, middle, end) {
+  if (value === 0) return start;
+  if (value === 50) return middle;
+  if (value === 100) return end;
+  return `${Math.round(value)}%`;
+}
+
+function syncAuthorPhotoCropControls() {
+  els.authorPhotoPositionX.value = state.authorPhotoPositionX;
+  els.authorPhotoPositionY.value = state.authorPhotoPositionY;
+  els.authorPhotoZoom.value = Math.round(state.authorPhotoZoom * 100);
+  els.authorPhotoPositionXVal.textContent = formatAuthorPhotoFocus(state.authorPhotoPositionX, 'Left', 'Center', 'Right');
+  els.authorPhotoPositionYVal.textContent = formatAuthorPhotoFocus(state.authorPhotoPositionY, 'Top', 'Center', 'Bottom');
+  els.authorPhotoZoomVal.textContent = `${Math.round(state.authorPhotoZoom * 100)}%`;
+}
+
+function resetAuthorPhotoCrop() {
+  state.authorPhotoPositionX = 50;
+  state.authorPhotoPositionY = 35;
+  state.authorPhotoZoom = 1;
+  syncAuthorPhotoCropControls();
+}
+
+function updateAuthorPhotoCropFromControls() {
+  state.authorPhotoPositionX = clampAuthorPhotoCrop(els.authorPhotoPositionX.value, 0, 100, 50);
+  state.authorPhotoPositionY = clampAuthorPhotoCrop(els.authorPhotoPositionY.value, 0, 100, 35);
+  state.authorPhotoZoom = clampAuthorPhotoCrop(Number(els.authorPhotoZoom.value) / 100, 1, 2.5, 1);
+  syncAuthorPhotoCropControls();
+  selectAuthorOpeningPreview();
+  updatePreviewSelect();
+  saveSession();
+  refreshPreview();
+}
+
+els.btnAuthorPhoto.addEventListener('click', async () => {
+  const filePath = await window.api.pickAuthorPhoto();
+  if (!filePath) return;
+  try {
+    const dataURL = await window.api.imageToDataURL(filePath);
+    if (!dataURL) throw new Error('The selected image could not be loaded.');
+    state.authorPhotoPath = filePath;
+    state.authorPhotoDataURL = dataURL;
+    resetAuthorPhotoCrop();
+    setFilePicked(els.fpAuthorPhoto, els.fpAuthorPhotoText, filePath);
+    els.btnAuthorPhotoClear.style.display = 'inline-flex';
+    els.authorPhotoCropControls.style.display = 'block';
+    selectAuthorOpeningPreview();
+    updatePreviewSelect();
+    saveSession();
+    await refreshPreview();
+    addLog('👤 Author photo selected.', 'ok');
+  } catch (error) {
+    addLog(`⚠ Could not load author photo: ${error.message}`, 'err');
+  }
+});
+
+els.btnAuthorPhotoClear.addEventListener('click', async () => {
+  state.authorPhotoPath = null;
+  state.authorPhotoDataURL = null;
+  resetAuthorPhotoCrop();
+  els.fpAuthorPhotoText.textContent = 'No author photo';
+  els.fpAuthorPhoto.classList.remove('has-file');
+  els.btnAuthorPhotoClear.style.display = 'none';
+  els.authorPhotoCropControls.style.display = 'none';
+  selectAuthorOpeningPreview();
+  updatePreviewSelect();
+  saveSession();
+  await refreshPreview();
+});
+
+for (const control of [els.authorPhotoPositionX, els.authorPhotoPositionY, els.authorPhotoZoom]) {
+  control.addEventListener('input', updateAuthorPhotoCropFromControls);
+}
+
+els.btnAuthorPhotoCropReset.addEventListener('click', () => {
+  resetAuthorPhotoCrop();
+  selectAuthorOpeningPreview();
+  updatePreviewSelect();
+  saveSession();
+  refreshPreview();
+});
 
 els.openingTitlesToggle.addEventListener('change', () => {
   state.openingTitlesEnabled = els.openingTitlesToggle.checked;
@@ -1608,6 +1733,10 @@ function buildRenderParams(chapter, openingPreviewCard = null) {
     accentColor: state.accentColor,
     logoDataURL: state.logoProcessedDataURL || state.logoDataURL || null,
     printPromoImageDataURL: state.printPromoImageDataURL,
+    authorPhotoDataURL: state.authorPhotoDataURL,
+    authorPhotoPositionX: state.authorPhotoPositionX,
+    authorPhotoPositionY: state.authorPhotoPositionY,
+    authorPhotoZoom: state.authorPhotoZoom,
     transitionStyle: state.transitionStyle,
     transitionDuration: state.transitionDuration,
     titleFontSize: state.titleFontSize,  // 0 = auto, >0 = fixed px
@@ -1669,6 +1798,10 @@ async function beginRender() {
     fastAudioCopy: state.fastAudioCopy,
     printPromoEnabled: state.printPromoEnabled,
     printPromoImageDataURL: state.printPromoImageDataURL,
+    authorPhotoDataURL: state.authorPhotoDataURL,
+    authorPhotoPositionX: state.authorPhotoPositionX,
+    authorPhotoPositionY: state.authorPhotoPositionY,
+    authorPhotoZoom: state.authorPhotoZoom,
     openingTitlesEnabled: state.openingTitlesEnabled,
     openingTitles: { ...state.openingTitles },
     forceLegacyRender: state.compatibilityMode,
@@ -1961,6 +2094,10 @@ function saveSession() {
     fastAudioCopy: state.fastAudioCopy,
     printPromoEnabled: state.printPromoEnabled,
     printPromoImagePath: state.printPromoImagePath,
+    authorPhotoPath: state.authorPhotoPath,
+    authorPhotoPositionX: state.authorPhotoPositionX,
+    authorPhotoPositionY: state.authorPhotoPositionY,
+    authorPhotoZoom: state.authorPhotoZoom,
     openingTitlesEnabled: state.openingTitlesEnabled,
     openingTitles: { ...state.openingTitles },
     compatibilityMode: state.compatibilityMode,
@@ -1985,6 +2122,16 @@ async function restoreSession() {
   els.fpPrintPromoImageText.textContent = 'Using book cover';
   els.fpPrintPromoImage.classList.remove('has-file');
   els.btnPrintPromoImageClear.style.display = 'none';
+  state.authorPhotoPath = null;
+  state.authorPhotoDataURL = null;
+  state.authorPhotoPositionX = 50;
+  state.authorPhotoPositionY = 35;
+  state.authorPhotoZoom = 1;
+  els.fpAuthorPhotoText.textContent = 'No author photo';
+  els.fpAuthorPhoto.classList.remove('has-file');
+  els.btnAuthorPhotoClear.style.display = 'none';
+  els.authorPhotoCropControls.style.display = 'none';
+  syncAuthorPhotoCropControls();
   if (stored0) {
     try {
       const d0 = JSON.parse(stored0);
@@ -2041,6 +2188,10 @@ async function restoreSession() {
       }
       state.printPromoEnabled = d0.printPromoEnabled !== false;
       els.printPromoToggle.checked = state.printPromoEnabled;
+      state.authorPhotoPositionX = clampAuthorPhotoCrop(d0.authorPhotoPositionX, 0, 100, 50);
+      state.authorPhotoPositionY = clampAuthorPhotoCrop(d0.authorPhotoPositionY, 0, 100, 35);
+      state.authorPhotoZoom = clampAuthorPhotoCrop(d0.authorPhotoZoom, 1, 2.5, 1);
+      syncAuthorPhotoCropControls();
       state.openingTitlesEnabled = d0.openingTitlesEnabled === true;
       state.openingTitles = {
         presentationLabel: 'AUDIOBOOK PRESENTATION',
@@ -2177,6 +2328,21 @@ async function restoreSession() {
         els.btnPrintPromoImageClear.style.display = 'inline-flex';
       } catch (error) {
         addLog('⚠ Saved promotion artwork was not found; using the book cover.', 'err');
+      }
+    }
+
+    if (data.authorPhotoPath) {
+      try {
+        const dataURL = await window.api.imageToDataURL(data.authorPhotoPath);
+        if (!dataURL) throw new Error('Author photo was unavailable.');
+        state.authorPhotoPath = data.authorPhotoPath;
+        state.authorPhotoDataURL = dataURL;
+        setFilePicked(els.fpAuthorPhoto, els.fpAuthorPhotoText, data.authorPhotoPath);
+        els.btnAuthorPhotoClear.style.display = 'inline-flex';
+        els.authorPhotoCropControls.style.display = 'block';
+        previewNeeded = true;
+      } catch (error) {
+        addLog('⚠ Saved author photo was not found; continuing without it.', 'err');
       }
     }
     

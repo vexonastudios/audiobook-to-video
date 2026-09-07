@@ -55,6 +55,10 @@ async function renderVideo(params, callbacks) {
     fastAudioCopy = true,
     printPromoEnabled = true,
     printPromoImageDataURL = null,
+    authorPhotoDataURL = null,
+    authorPhotoPositionX = 50,
+    authorPhotoPositionY = 35,
+    authorPhotoZoom = 1,
     printPromoStart = 30,
     printPromoDuration = 8,
     openingTitlesEnabled = false,
@@ -149,6 +153,10 @@ async function renderVideo(params, callbacks) {
       accentColor,
       logoDataURL,
       printPromoImageDataURL,
+      authorPhotoDataURL,
+      authorPhotoPositionX,
+      authorPhotoPositionY,
+      authorPhotoZoom,
       coverBorderWidth,
       titleFontSize
     });

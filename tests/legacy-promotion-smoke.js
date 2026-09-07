@@ -36,6 +36,12 @@ async function runTest() {
       background: { r: 244, g: 20, b: 210, alpha: 0.85 }
     } }).png().toFile(promotionArtworkPath);
     const printPromoImageDataURL = await imageToDataURL(promotionArtworkPath);
+    const authorPhotoPath = path.join(root, 'author-photo.png');
+    await sharp({ create: {
+      width: 240, height: 360, channels: 3,
+      background: { r: 20, g: 230, b: 70 }
+    } }).png().toFile(authorPhotoPath);
+    const authorPhotoDataURL = await imageToDataURL(authorPhotoPath);
     const audioPath = path.join(root, 'audio.mp3');
     const outputPath = path.join(root, 'legacy-promotion.mp4');
     run(ffmpegPath, [
@@ -47,6 +53,7 @@ async function runTest() {
     const execute = expression => frameWindow.webContents.executeJavaScript(expression);
     let openingFramesRendered = 0;
     let promotionArtworkForwarded = false;
+    let authorPhotoForwarded = false;
     await renderVideoLegacy({
       coverDataURL,
       bgDataURL: coverDataURL,
@@ -70,6 +77,10 @@ async function runTest() {
         originallyPublished: '2026',
         site: 'scrollreader.com'
       },
+      authorPhotoDataURL,
+      authorPhotoPositionX: 18,
+      authorPhotoPositionY: 72,
+      authorPhotoZoom: 1.65,
       printPromoEnabled: true,
       printPromoImageDataURL,
       printPromoStart: 1,
@@ -80,6 +91,12 @@ async function runTest() {
       renderFrame: params => execute(`(async()=>{await window.renderFrame(${JSON.stringify(params)});return document.getElementById('mainCanvas').toDataURL('image/png')})()`),
       renderOpeningFrameToFile: (params, targetPath) => {
         openingFramesRendered++;
+        if (params.openingPreviewCard?.type === 'author') {
+          authorPhotoForwarded = params.authorPhotoDataURL === authorPhotoDataURL
+            && params.authorPhotoPositionX === 18
+            && params.authorPhotoPositionY === 72
+            && params.authorPhotoZoom === 1.65;
+        }
         return execute(`window.renderOpeningFrameToFile(${JSON.stringify(params)}, ${JSON.stringify(targetPath)})`);
       },
       renderPromotionOverlayToFile: (params, targetPath) => {
@@ -100,6 +117,9 @@ async function runTest() {
     }
     if (openingFramesRendered !== 7) {
       throw new Error(`Legacy opening titles expected 7 rendered stills including the title-only state, got ${openingFramesRendered}`);
+    }
+    if (!authorPhotoForwarded) {
+      throw new Error('Author photo was not forwarded to the Compatibility Mode author card.');
     }
     if (!promotionArtworkForwarded) {
       throw new Error('Custom promotion artwork was not forwarded to Compatibility Mode.');

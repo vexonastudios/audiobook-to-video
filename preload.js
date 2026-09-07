@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('api', {
   // File dialogs
   pickCover: () => ipcRenderer.invoke('pick-cover'),
   pickPrintPromoImage: () => ipcRenderer.invoke('pick-print-promo-image'),
+  pickAuthorPhoto: () => ipcRenderer.invoke('pick-author-photo'),
   pickBackground: () => ipcRenderer.invoke('pick-background'),
   pickWav: () => ipcRenderer.invoke('pick-wav'),
   pickLogo: () => ipcRenderer.invoke('pick-logo'),

@@ -5,6 +5,7 @@ const { autoUpdater } = require('electron-updater');
 const { RenderHistory } = require('./src/renderHistory');
 const { RenderJob } = require('./src/renderJob');
 const { createRenderNotifier } = require('./src/renderNotification');
+const { encodeCompanionMp3 } = require('./src/companionMp3');
 
 if (process.platform === 'win32') app.setAppUserModelId('com.vexonastudios.videogenerator');
 
@@ -424,7 +425,34 @@ ipcMain.handle('start-render', async (event, params) => {
     ...params,
     appVersion: app.getVersion(),
     audioCacheDir: path.join(app.getPath('userData'), 'audio-cache')
-  }, renderVideo, {
+  }, async (renderParams, callbacks) => {
+    const rendered = await renderVideo(renderParams, callbacks);
+    if (callbacks.isCancelled()) throw new Error('RENDER_CANCELLED');
+
+    callbacks.onLog('\n🎧 Encoding companion MP3 at 128 kbps…');
+    callbacks.onProgress({
+      phase: 'encoding', percent: 99, label: 'Encoding companion MP3 at 128 kbps…'
+    });
+    let mp3Path;
+    try {
+      mp3Path = await encodeCompanionMp3({
+        sourceAudioPath: renderParams.wavPath,
+        videoOutputPath: renderParams.outputPath,
+        durationSeconds: renderParams.audioDuration,
+        isCancelled: callbacks.isCancelled,
+        onProgress: percent => callbacks.onProgress({
+          phase: 'encoding',
+          percent: 99,
+          label: `Encoding companion MP3 at 128 kbps… ${Math.round(percent)}%`
+        })
+      });
+    } catch (error) {
+      if (error.message === 'RENDER_CANCELLED') throw error;
+      throw new Error(`Video saved, but the companion MP3 could not be created: ${error.message}`);
+    }
+    callbacks.onLog(`✅ Companion MP3 saved: ${mp3Path}`);
+    return { ...rendered, mp3Path };
+  }, {
     renderFrame: renderFrameInWindow,
     prepareFrameRenderer,
     renderFrameToFile,

@@ -73,6 +73,7 @@ class RenderJob {
         elapsedSeconds,
         videoSeconds: rendered?.durationSeconds || videoDuration(params),
         outputPath: params.outputPath,
+        mp3Path: rendered?.mp3Path || null,
         chapterCount: params.chapters?.length || 0,
         appVersion: params.appVersion,
         profile: renderProfile(params, encoder),
@@ -85,7 +86,14 @@ class RenderJob {
         historySaved = false;
         this.send('render-log', `⚠ Video saved, but render timing could not be saved: ${error.message}`);
       }
-      result = { success: true, outputPath: params.outputPath, elapsedSeconds, record, historySaved };
+      result = {
+        success: true,
+        outputPath: params.outputPath,
+        mp3Path: rendered?.mp3Path || null,
+        elapsedSeconds,
+        record,
+        historySaved
+      };
     } catch (error) {
       const cancelled = this.cancelled || error.message === 'RENDER_CANCELLED';
       result = { success: false, cancelled, error: cancelled ? null : error.message, elapsedSeconds: elapsed() };

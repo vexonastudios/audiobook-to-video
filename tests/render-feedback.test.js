@@ -36,7 +36,7 @@ async function successfulRender(f) {
     f.setTime(1600);
     cb.onProgress({ percent: 100, phase: 'done' });
     f.setTime(1680); // Cleanup remains part of the completed job's elapsed time.
-    return { durationSeconds: 21600 };
+    return { durationSeconds: 21600, mp3Path: 'Brazil.mp3' };
   }, {});
 }
 
@@ -45,6 +45,8 @@ test('saves exact successful timing across restart and scales the next comparabl
   assert.equal(f.history.info(params).estimatedSeconds, null);
   const result = await successfulRender(f);
   assert.equal(result.elapsedSeconds, 1680);
+  assert.equal(result.mp3Path, 'Brazil.mp3');
+  assert.equal(result.record.mp3Path, 'Brazil.mp3');
   assert.equal(f.alerts.length, 1);
   assert.equal(f.alerts[0][1], true);
   assert.equal(f.events.filter(([event]) => event === 'render-complete').length, 1);
@@ -164,12 +166,13 @@ test('success plays one chime, sends a silent toast, and restores the app when c
     restore: () => calls.push('restore'), show: () => calls.push('show'), focus: () => calls.push('focus')
   };
   const notify = createRenderNotifier({ Notification, getWindow: () => window, beep: () => {}, onWarning: () => {} });
-  const result = { success: true, outputPath: 'Brazil.mp4', elapsedSeconds: 1680 };
+  const result = { success: true, outputPath: 'Brazil.mp4', mp3Path: 'Brazil.mp3', elapsedSeconds: 1680 };
   notify(result, true);
   assert.deepEqual(calls, ['render-chime']);
   assert.equal(notifications[0].shown, true);
   assert.equal(notifications[0].options.silent, true);
   assert.match(notifications[0].options.body, /28m 0s/);
+  assert.match(notifications[0].options.body, /Brazil\.mp4 \+ Brazil\.mp3/);
   notifications[0].emit('click');
   assert.deepEqual(calls.slice(1), ['restore', 'show', 'focus']);
   calls.length = 0;

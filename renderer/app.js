@@ -1906,8 +1906,11 @@ function setupRenderListeners() {
       const completedOutputPath = result.outputPath || state.outputPath;
       state.lastRenderedOutputPath = completedOutputPath;
       els.btnOpenOutput.style.display = 'flex';
-      setProgress(100, '✅ Video exported successfully!');
+      setProgress(100, '✅ Video and MP3 exported successfully!');
       addLog('🎉 Done! Video saved to: ' + completedOutputPath, 'ok');
+      if (result.mp3Path) {
+        addLog('🎧 128 kbps MP3 saved to: ' + result.mp3Path, 'ok');
+      }
 
       // ── Save chapter markers as a companion .txt file ──────────────
       if (state.chapters.length > 0 && completedOutputPath) {

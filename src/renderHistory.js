@@ -19,6 +19,7 @@ function renderProfile(params, encoder = null) {
     printPromotion: params.printPromoEnabled !== false,
     introStyle: params.introClipPath ? (params.introStyle || 'push') : 'none',
     fastAudio: params.fastAudioCopy !== false,
+    companionMp3: true,
     audioFormat: path.extname(params.wavPath || '').toLowerCase()
   };
 }

@@ -50,6 +50,7 @@
   const FRAME_HEIGHT = 1080;
   const RENDER_SCALE = FRAME_WIDTH / LOGICAL_WIDTH;
   const { resolveOpeningTitleFrame } = require('../src/openingTitles');
+  const { createCoverArtwork, drawCoverBacklight } = require('./coverArtwork');
   const renderFontsReady = Promise.all([
     '400 72px "EB Garamond"', '500 72px "EB Garamond"',
     '700 72px "EB Garamond"', 'italic 400 35px "EB Garamond"'
@@ -468,7 +469,8 @@
       bgOpacity = 0.65,
       accentColor = [201, 169, 110],
       logoDataURL = null,
-      coverBorderWidth = 0
+      coverBorderWidth = 0,
+      coverBacklight = 0.45
     } = params;
 
     const W = LOGICAL_WIDTH, H = LOGICAL_HEIGHT;
@@ -528,6 +530,14 @@
     const cx = coverAreaX + (coverAreaW - cw) / 2;
     const cy = coverAreaY + (coverAreaH - ch) / 2;
 
+    drawCoverBacklight(ctx, {
+      x: cx, y: cy, width: cw, height: ch, intensity: coverBacklight, accentColor
+    });
+    const artwork = createCoverArtwork(
+      coverImg, cw * RENDER_SCALE, ch * RENDER_SCALE,
+      Math.max(0, Math.min(10, Number(coverBorderWidth) || 0)) * RENDER_SCALE, accentColor
+    );
+
     // Drop shadow
     ctx.save();
     ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
@@ -535,13 +545,9 @@
     ctx.shadowOffsetX = 12;
     ctx.shadowOffsetY = 12;
 
-    if (coverBorderWidth > 0) {
-      ctx.strokeStyle = `rgb(${accentColor.join(',')})`;
-      ctx.lineWidth = coverBorderWidth;
-      ctx.strokeRect(cx - coverBorderWidth/2, cy - coverBorderWidth/2, cw + coverBorderWidth, ch + coverBorderWidth);
-    }
-    
-    ctx.drawImage(coverImg, cx, cy, cw, ch);
+    ctx.drawImage(artwork.canvas,
+      cx - artwork.padding / RENDER_SCALE, cy - artwork.padding / RENDER_SCALE,
+      artwork.canvas.width / RENDER_SCALE, artwork.canvas.height / RENDER_SCALE);
     ctx.restore();
 
     // ── 3. Right-side content ───────────────────────────────────

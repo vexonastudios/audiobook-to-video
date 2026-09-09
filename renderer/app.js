@@ -31,6 +31,7 @@ const state = {
   bgOpacity: 0.65,
   bgOffsetY: 0,       // -100..+100: negative = shift up, positive = shift down
   coverBorderWidth: 0,
+  coverBacklight: 0.45,
 
   // Chapter transition
   transitionStyle: 'cut',  // cut | fade | dissolve | flare | zoom
@@ -175,6 +176,8 @@ const els = {
   bgOffsetVal: $('bg-offset-val'),
   borderSlider: $('border-slider'),
   borderVal: $('border-val'),
+  coverBacklightSlider: $('cover-backlight-slider'),
+  coverBacklightVal: $('cover-backlight-val'),
 
   // Accent
   accentPicker: $('accent-picker'),
@@ -290,6 +293,7 @@ els.btnNewProject.addEventListener('click', () => {
       blurAmount: 40,
       bgOpacity: 0.65,
       coverBorderWidth: 0,
+      coverBacklight: 0.45,
       transitionStyle: 'cut',
       transitionDuration: 1.0,
       introClipPath: null,
@@ -397,6 +401,8 @@ els.btnNewProject.addEventListener('click', () => {
     els.opacityVal.textContent = '65%';
     els.borderSlider.value = 0;
     els.borderVal.textContent = '0px';
+    els.coverBacklightSlider.value = 45;
+    els.coverBacklightVal.textContent = '45%';
 
     updateAccentDisplay(state.accentColor, true);
 
@@ -427,6 +433,7 @@ els.btnSaveProject.addEventListener('click', async () => {
     blurAmount: state.blurAmount,
     bgOpacity: state.bgOpacity,
     coverBorderWidth: state.coverBorderWidth,
+    coverBacklight: state.coverBacklight,
     chaptersText: els.chaptersTextarea.value,
     selectedChapterIndex: state.selectedChapterIndex,
     transitionStyle: state.transitionStyle,
@@ -1093,6 +1100,14 @@ els.borderSlider.addEventListener('input', () => {
 });
 els.borderSlider.addEventListener('change', () => { refreshPreview(); saveSession(); });
 
+els.coverBacklightSlider.addEventListener('input', () => {
+  const pct = Number(els.coverBacklightSlider.value);
+  state.coverBacklight = pct / 100;
+  els.coverBacklightVal.textContent = pct + '%';
+  refreshPreview();
+});
+els.coverBacklightSlider.addEventListener('change', () => saveSession());
+
 // ─────────────────────────────────────────────────────────────
 // Color Picker
 // ─────────────────────────────────────────────────────────────
@@ -1733,6 +1748,7 @@ function buildRenderParams(chapter, openingPreviewCard = null) {
     bgOffsetY: state.bgOffsetY,
     coverBorderWidth: state.coverBorderWidth,
     chapter,
+    coverBacklight: state.coverBacklight,
     blendAlpha: 0,
     nextChapter: null,
     accentColor: state.accentColor,
@@ -1790,6 +1806,7 @@ async function beginRender() {
     bgOffsetY: state.bgOffsetY,
     coverBorderWidth: state.coverBorderWidth,
     titleFontSize: state.titleFontSize,
+    coverBacklight: state.coverBacklight,
     accentColor: state.accentColor,
     logoDataURL: state.logoProcessedDataURL || state.logoDataURL || null,
     transitionStyle: state.transitionStyle,
@@ -2085,6 +2102,7 @@ function saveSession() {
     bgOffsetY: state.bgOffsetY,
     coverBorderWidth: state.coverBorderWidth,
     chaptersText: els.chaptersTextarea.value,
+    coverBacklight: state.coverBacklight,
     selectedChapterIndex: state.selectedChapterIndex,
     transitionStyle: state.transitionStyle,
     transitionDuration: state.transitionDuration,
@@ -2118,6 +2136,11 @@ function saveSession() {
 async function restoreSession() {
   // Restore logo library first
   await restoreLogoLibrary();
+
+  // Projects saved before this control existed start with the default glow.
+  state.coverBacklight = 0.45;
+  els.coverBacklightSlider.value = 45;
+  els.coverBacklightVal.textContent = '45%';
 
   // Restore transition settings early so UI reflects saved values
   const stored0 = localStorage.getItem('audiobook-video-gen-session');
@@ -2264,6 +2287,11 @@ async function restoreSession() {
     }
     
     // Sliders
+    if (Number.isFinite(data.coverBacklight)) {
+      state.coverBacklight = Math.max(0, Math.min(1, data.coverBacklight));
+      els.coverBacklightSlider.value = Math.round(state.coverBacklight * 100);
+      els.coverBacklightVal.textContent = els.coverBacklightSlider.value + '%';
+    }
     if (data.blurAmount !== undefined) {
       state.blurAmount = data.blurAmount;
       els.blurSlider.value = data.blurAmount;

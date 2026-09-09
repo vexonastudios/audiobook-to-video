@@ -7,6 +7,7 @@ async function runTest() {
   const promotionArtworkPath = path.join(projectRoot, 'book-mockup.png');
   const authorPhotoPath = path.join(projectRoot, 'author-photo.jpg');
   let openedPath = null;
+  let savedProject = null;
 
   ipcMain.handle('get-gpu-name', () => 'Smoke Test GPU');
   ipcMain.handle('get-render-info', () => ({ settings: { completionSound: true }, lastRender: null, estimatedSeconds: null }));
@@ -17,6 +18,7 @@ async function runTest() {
     openedPath = filePath;
     return { success: true };
   });
+  ipcMain.handle('save-project-file', (_, content) => { savedProject = JSON.parse(content); return true; });
 
   const window = new BrowserWindow({
     width: 1400,
@@ -45,6 +47,32 @@ async function runTest() {
       }
     }
     await checkTransition('cut');
+    const glowState = await window.webContents.executeJavaScript(`(async () => {
+      const slider = document.getElementById('cover-backlight-slider');
+      const defaultValue = state.coverBacklight;
+      slider.value = 72;
+      slider.dispatchEvent(new Event('input')); slider.dispatchEvent(new Event('change'));
+      const preview = buildRenderParams({ title: 'Test' }).coverBacklight;
+      const saved = JSON.parse(localStorage.getItem('audiobook-video-gen-session')).coverBacklight;
+      await restoreSession();
+      const restored = state.coverBacklight;
+      document.getElementById('btn-save-project').click();
+      return { defaultValue, saved, restored, preview, slider: slider.value };
+    })()`);
+    if (glowState.defaultValue !== 0.45 || glowState.saved !== 0.72 || glowState.restored !== 0.72
+      || glowState.preview !== 0.72 || glowState.slider !== '72') {
+      throw new Error('Cover backlight control did not persist and reach preview: ' + JSON.stringify(glowState));
+    }
+    await new Promise(resolve => setTimeout(resolve, 50));
+    if (savedProject?.coverBacklight !== 0.72) throw new Error('Saved project lost cover backlight');
+    await window.webContents.executeJavaScript(`(async () => {
+      localStorage.setItem('audiobook-video-gen-session', JSON.stringify({coverBacklight: 0}));
+      await restoreSession();
+      if (state.coverBacklight !== 0) throw new Error('Backlight off was not restored');
+      localStorage.setItem('audiobook-video-gen-session', '{}');
+      await restoreSession();
+      if (state.coverBacklight !== 0.45) throw new Error('Old project did not use default backlight');
+    })()`);
     await window.webContents.executeJavaScript(`document.getElementById('btn-print-promo-image').click()`);
     await new Promise(resolve => setTimeout(resolve, 50));
     let promotionState = await window.webContents.executeJavaScript(`(() => {
@@ -184,6 +212,7 @@ async function runTest() {
     ipcMain.removeHandler('pick-author-photo');
     ipcMain.removeHandler('image-to-dataurl');
     ipcMain.removeHandler('open-output-file');
+    ipcMain.removeHandler('save-project-file');
   }
 }
 

@@ -68,6 +68,7 @@ async function renderVideo(params, callbacks) {
     chapters, blurAmount, bgOpacity, accentColor,
     logoDataURL, crf = 28,
     coverBorderWidth = 0,
+    coverBacklight = 0.45,
     transitionStyle = 'cut',
     transitionDuration = 1.0,
     introClipPath = null,
@@ -150,6 +151,7 @@ async function renderVideo(params, callbacks) {
         nextChapter: null,
         accentColor, logoDataURL,
         coverBorderWidth,
+        coverBacklight,
         titleFontSize
       });
 
@@ -255,6 +257,7 @@ async function renderVideo(params, callbacks) {
           authorPhotoPositionY,
           authorPhotoZoom,
           coverBorderWidth,
+          coverBacklight,
           titleFontSize
         };
         await renderOpeningFrameToFile({ ...baseOpeningParams, openingBlank: true }, blankPath);
@@ -648,6 +651,7 @@ function buildTransitionFrameParams({ params, chapterA, chapterB, alpha, transit
     accentColor: params.accentColor,
     logoDataURL: params.logoDataURL,
     coverBorderWidth: params.coverBorderWidth,
+    coverBacklight: params.coverBacklight,
     titleFontSize: params.titleFontSize
   };
 

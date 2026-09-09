@@ -46,6 +46,7 @@ async function runScenario({
     ],
     blurAmount: 10,
     bgOpacity: 0.6,
+    coverBacklight: 0.72,
     accentColor: [211, 193, 166],
     transitionStyle,
     transitionDuration: 1,
@@ -85,6 +86,7 @@ async function runScenario({
   });
 
   const metadata = probe(outputPath);
+  if (preparedParams.coverBacklight !== 0.72) throw new Error('Optimized renderer lost cover backlight strength');
   const expectedEncoders = codec === 'h265' ? ['hevc_nvenc', 'libx265'] : ['h264_nvenc', 'libx264'];
   if (!expectedEncoders.includes(detectedEncoder) || Math.abs(renderResult.durationSeconds - expectedDuration) > 0.1) {
     throw new Error(`${name}: render timing metadata was not reported correctly`);

@@ -45,6 +45,7 @@ async function renderVideo(params, callbacks) {
     logoDataURL,
     crf = 18,
     coverBorderWidth = 0,
+    coverBacklight = 0.45,
     transitionStyle = 'cut',
     transitionDuration = 1,
     introClipPath = null,
@@ -158,6 +159,7 @@ async function renderVideo(params, callbacks) {
       authorPhotoPositionY,
       authorPhotoZoom,
       coverBorderWidth,
+      coverBacklight,
       titleFontSize
     });
 

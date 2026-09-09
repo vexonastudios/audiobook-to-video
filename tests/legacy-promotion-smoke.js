@@ -62,6 +62,7 @@ async function runTest() {
       chapters: [{ startTime: 0, endTime: 18, number: 1, title: 'Legacy Promotion Test', isNumbered: true }],
       blurAmount: 20,
       bgOpacity: 0.65,
+      coverBacklight: 0.72,
       accentColor: [211, 193, 166],
       transitionStyle: 'cut',
       codec: 'h264',
@@ -88,8 +89,12 @@ async function runTest() {
     }, {
       onProgress: () => {},
       onLog: () => {},
-      renderFrame: params => execute(`(async()=>{await window.renderFrame(${JSON.stringify(params)});return document.getElementById('mainCanvas').toDataURL('image/png')})()`),
+      renderFrame: params => {
+        if (params.coverBacklight !== 0.72) throw new Error('Legacy chapter lost cover backlight strength');
+        return execute(`(async()=>{await window.renderFrame(${JSON.stringify(params)});return document.getElementById('mainCanvas').toDataURL('image/png')})()`);
+      },
       renderOpeningFrameToFile: (params, targetPath) => {
+        if (params.coverBacklight !== 0.72) throw new Error('Legacy opening lost cover backlight strength');
         openingFramesRendered++;
         if (params.openingPreviewCard?.type === 'author') {
           authorPhotoForwarded = params.authorPhotoDataURL === authorPhotoDataURL

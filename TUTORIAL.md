@@ -19,6 +19,12 @@ Example Format:
 (1:45) 1 - The Journey Begins
 (45:20) 2 - The Sea of Darkness
 ```
+To show a smaller author or subtitle beneath a chapter title, add it after an em dash or use ` | ` for any custom subtitle:
+```
+(11:04) 2 - Faith — C. H. Spurgeon
+(24:43) 3 - Faith | D. L. Moody
+```
+The author appears in the chapter list and under the title in the video preview and export. The numbered chapter marker still starts at the same timestamp. Dates such as `Title — 1870` continue to appear on the smaller line too.
 *Click **Parse Chapters** to validate them. You will see a list appear below the text box.*
 
 ## 4. Adjust Styles & Preview (Center Panel)

@@ -274,7 +274,8 @@
     const textAreaW = W - textAreaX - 40;
     const textCenterX = textAreaX + textAreaW / 2;
     const hasNumber = chapter.isNumbered && chapter.number !== null;
-    const fixedAnchorY = chapter.dateRange ? 230 : 270;
+    const secondaryLine = [chapter.subtitle, chapter.dateRange].filter(Boolean).join(' · ');
+    const fixedAnchorY = secondaryLine ? 230 : 270;
 
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
@@ -313,12 +314,12 @@
       const titleStartY = lineY + 38 + (fontSize / 2);
       lines.forEach((line, i) => ctx.fillText(line, textCenterX, titleStartY + i * lineH));
 
-      if (chapter.dateRange) {
-        const drFontSize = Math.max(26, fontSize * 0.55);
-        ctx.font = `italic 400 ${drFontSize}px "EB Garamond"`;
+      if (secondaryLine) {
+        const secondary = fitText(ctx, secondaryLine, 'EB Garamond', Math.max(26, fontSize * 0.55), 20, textAreaW - 110, 85);
+        ctx.font = `italic 400 ${secondary.fontSize}px "EB Garamond"`;
         ctx.fillStyle = accentCSS;
-        const drY = titleStartY + lines.length * lineH + drFontSize * 0.6;
-        ctx.fillText(chapter.dateRange, textCenterX, drY);
+        const drY = titleStartY + lines.length * lineH + secondary.fontSize * 0.6;
+        secondary.lines.forEach((line, i) => ctx.fillText(line, textCenterX, drY + i * secondary.fontSize * 1.18));
       }
     } else {
       let fontSize, lines;
@@ -336,12 +337,12 @@
       const titleStartY = fixedAnchorY + 28 + 38 + (fontSize / 2);
       lines.forEach((line, i) => ctx.fillText(line, textCenterX, titleStartY + i * lineH));
 
-      if (chapter.dateRange) {
-        const drFontSize = Math.max(28, fontSize * 0.55);
-        ctx.font = `italic 400 ${drFontSize}px "EB Garamond"`;
+      if (secondaryLine) {
+        const secondary = fitText(ctx, secondaryLine, 'EB Garamond', Math.max(28, fontSize * 0.55), 20, textAreaW - 110, 85);
+        ctx.font = `italic 400 ${secondary.fontSize}px "EB Garamond"`;
         ctx.fillStyle = accentCSS;
-        const drY = titleStartY + lines.length * lineH + drFontSize * 0.6;
-        ctx.fillText(chapter.dateRange, textCenterX, drY);
+        const drY = titleStartY + lines.length * lineH + secondary.fontSize * 0.6;
+        secondary.lines.forEach((line, i) => ctx.fillText(line, textCenterX, drY + i * secondary.fontSize * 1.18));
       }
     }
 

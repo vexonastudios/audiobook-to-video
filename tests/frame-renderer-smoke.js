@@ -14,6 +14,7 @@ async function run() {
 
   const chapterOnePath = path.join(outputDir, 'chapter-one.png');
   const chapterTwoPath = path.join(outputDir, 'chapter-two.png');
+  const chapterBylinePath = path.join(outputDir, 'chapter-byline.png');
   const trimmedCoverFramePath = path.join(outputDir, 'trimmed-cover-frame.png');
   const transparentPaddedCoverPath = path.join(outputDir, 'transparent-padded-cover.png');
   const opaqueCoverPath = path.join(outputDir, 'opaque-cover.png');
@@ -119,6 +120,11 @@ async function run() {
       })}, ${JSON.stringify(chapterTwoPath)})`
     );
     await window.webContents.executeJavaScript(
+      `window.renderFrameToFile(${JSON.stringify({
+        chapter: { number: 2, title: 'Faith', subtitle: 'C. H. Spurgeon', isNumbered: true }
+      })}, ${JSON.stringify(chapterBylinePath)})`
+    );
+    await window.webContents.executeJavaScript(
       `window.setRenderBaseParams(${JSON.stringify({
         ...baseParams,
         coverDataURL: preparedTransparentCover.dataURL,
@@ -210,6 +216,7 @@ async function run() {
     for (const outputPath of [
       chapterOnePath,
       chapterTwoPath,
+      chapterBylinePath,
       trimmedCoverFramePath,
       openingBlankPath,
       openingTitlePath,
@@ -235,6 +242,24 @@ async function run() {
 
     if (fs.readFileSync(chapterOnePath).equals(fs.readFileSync(chapterTwoPath))) {
       throw new Error('Distinct chapter parameters produced identical PNG files.');
+    }
+    const chapterBylineTypography = await window.webContents.executeJavaScript(`(() => {
+      const ctx = document.createElement('canvas').getContext('2d');
+      const calls = []; const fillText = ctx.fillText.bind(ctx);
+      ctx.fillText = (value, x, y) => { calls.push({ value, x, y, font: ctx.font }); fillText(value, x, y); };
+      drawChapterText(ctx, { chapter: { number: 2, title: 'Faith', subtitle: 'C. H. Spurgeon', isNumbered: true } });
+      const dated = [];
+      ctx.fillText = (value, x, y) => { dated.push({ value, x, y, font: ctx.font }); fillText(value, x, y); };
+      drawChapterText(ctx, { chapter: { number: 2, title: 'Faith', dateRange: '1870', isNumbered: true } });
+      return { calls, dated };
+    })()`);
+    const chapterTitle = chapterBylineTypography.calls.find(call => call.value === 'Faith');
+    const byline = chapterBylineTypography.calls.find(call => call.value === 'C. H. Spurgeon');
+    if (!chapterTitle || !byline || !byline.font.includes('italic')
+      || parseFloat(byline.font.match(/([\d.]+)px/)?.[1]) >= parseFloat(chapterTitle.font.match(/([\d.]+)px/)?.[1])
+      || byline.y <= chapterTitle.y || !chapterBylineTypography.dated.some(call => call.value === '1870')) {
+      throw new Error('Author byline was not smaller and below the chapter title, or dates regressed: '
+        + JSON.stringify(chapterBylineTypography));
     }
     const trimmedCoverPixel = await sharp(trimmedCoverFramePath)
       .extract({ left: 402, top: 70, width: 1, height: 1 }).removeAlpha().raw().toBuffer();

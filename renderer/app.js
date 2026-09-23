@@ -1268,6 +1268,20 @@ function extractDateRange(title) {
   return { cleanTitle: title, dateRange: null };
 }
 
+function extractChapterByline(title) {
+  // " | " is the unambiguous separator for any chapter subtitle. Also accept
+  // the author suffixes in existing chapter lists ("Title — C. H. Spurgeon").
+  // Require at least two name tokens so ordinary titles with an em dash stay
+  // intact. Dates have already been removed by extractDateRange.
+  const explicit = title.match(/^(.+?)\s+\|\s+(.+)$/);
+  const nameToken = String.raw`(?:[A-Z]\.|[A-Z][\p{L}'’\-]*)`;
+  const authorSuffix = new RegExp(`^(.+?)\\s+—\\s+(${nameToken}(?:\\s+${nameToken})+)$`, 'u');
+  const match = explicit || title.match(authorSuffix);
+  return match
+    ? { cleanTitle: match[1].trim(), subtitle: match[2].trim() }
+    : { cleanTitle: title, subtitle: null };
+}
+
 /**
  * Parses an SRT file and extracts chapter timing markers.
  *
@@ -1365,10 +1379,11 @@ function parseSrtToChapters(srtText) {
     title = toTitleCase(title);
 
     // Extract date ranges
-    const { cleanTitle, dateRange } = extractDateRange(title);
+    const { cleanTitle: withoutDate, dateRange } = extractDateRange(title);
+    const { cleanTitle, subtitle } = extractChapterByline(withoutDate);
     title = cleanTitle;
 
-    entries.push({ startSec: chapterStartSec, number, title, dateRange });
+    entries.push({ startSec: chapterStartSec, number, title, dateRange, subtitle });
     accumulatedText = '';
     collecting = false;
   };
@@ -1452,11 +1467,12 @@ function parseSrtToChapters(srtText) {
 
   entries.forEach((entry) => {
     const tc = secToTimecode(entry.startSec);
+    const subtitleSuffix = entry.subtitle ? ` | ${entry.subtitle}` : '';
     const dateSuffix = entry.dateRange ? ` [${entry.dateRange}]` : '';
     if (entry.number !== null) {
-      outputLines.push(`(${tc}) ${entry.number} - ${entry.title}${dateSuffix}`);
+      outputLines.push(`(${tc}) ${entry.number} - ${entry.title}${subtitleSuffix}${dateSuffix}`);
     } else {
-      outputLines.push(`(${tc}) ${entry.title}${dateSuffix}`);
+      outputLines.push(`(${tc}) ${entry.title}${subtitleSuffix}${dateSuffix}`);
     }
   });
 
@@ -1526,7 +1542,8 @@ function parseChaptersFromTextarea() {
     rawTitle = toTitleCase(rawTitle);
 
     // Extract date range (handles both brackets from SRT parser and raw user input)
-    const { cleanTitle, dateRange } = extractDateRange(rawTitle);
+    const { cleanTitle: withoutDate, dateRange } = extractDateRange(rawTitle);
+    const { cleanTitle, subtitle } = extractChapterByline(withoutDate);
 
     if (numMatch) {
       chapters.push({
@@ -1534,6 +1551,7 @@ function parseChaptersFromTextarea() {
         endTime: null,
         number: parseInt(numMatch[1], 10),
         title: cleanTitle,
+        subtitle,
         dateRange,
         isNumbered: true,
         timecode: timeStr
@@ -1544,6 +1562,7 @@ function parseChaptersFromTextarea() {
         endTime: null,
         number: null,
         title: cleanTitle,
+        subtitle,
         dateRange,
         isNumbered: false,
         timecode: timeStr
@@ -1609,6 +1628,7 @@ function renderChapterList() {
       <div class="ch-info">
         ${ch.isNumbered ? `<div class="ch-label">Chapter ${ch.number}</div>` : ''}
         <div class="ch-title">${escHtml(ch.title)}</div>
+        ${ch.subtitle ? `<div class="ch-subtitle">${escHtml(ch.subtitle)}</div>` : ''}
       </div>
       ${dur !== null ? `<div class="ch-dur">${formatDuration(dur)}</div>` : ''}
     `;

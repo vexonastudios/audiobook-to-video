@@ -203,6 +203,42 @@ async function runTest() {
       throw new Error(`Open Video requested ${openedPath || 'nothing'}, expected ${completedPath}`);
     }
 
+    const chapterBylines = await window.webContents.executeJavaScript(`(() => {
+      document.getElementById('chapters-textarea').value = [
+        '(0:00) Introduction',
+        '(0:35) 1 - What I Believe — Arthur Finlayson',
+        '(11:04) 2 - Faith — C. H. Spurgeon',
+        '(24:43) 3 - Faith — D. L. Moody',
+        '(49:32) 4 - Trust — D. L. Moody',
+        '(1:17:07) 5 - What Must I Do to be Saved? — W. Hay Aitken',
+        '(1:55:33) 6 - Faith in Christ — Alexander Maclaren',
+        '(2:18:47) 7 - Scriptural Salvation — C. H. Spurgeon',
+        '(2:35:37) 8 - The Power of Feeble Faith — Alexander Maclaren',
+        '(3:02:20) 9 - A Solemn Impeachment of Unbelievers — C. H. Spurgeon'
+      ].join('\\n');
+      parseChaptersFromTextarea();
+      const actual = state.chapters.map(ch => ({ title: ch.title, subtitle: ch.subtitle, dateRange: ch.dateRange }));
+      const list = Array.from(document.querySelectorAll('.ch-subtitle')).map(el => el.textContent);
+      const preview = buildRenderParams(state.chapters[2]).chapter;
+      const explicit = extractChapterByline('Faith | By C. H. Spurgeon');
+      const ordinaryDash = extractChapterByline('Faith — Hope');
+      const year = extractDateRange('Faith — 1870');
+      return { actual, list, preview: { title: preview.title, subtitle: preview.subtitle },
+        explicit, ordinaryDash, year };
+    })()`);
+    const expectedAuthors = ['Arthur Finlayson', 'C. H. Spurgeon', 'D. L. Moody', 'D. L. Moody',
+      'W. Hay Aitken', 'Alexander Maclaren', 'C. H. Spurgeon', 'Alexander Maclaren', 'C. H. Spurgeon'];
+    if (chapterBylines.actual.length !== 10 || chapterBylines.actual[0].subtitle !== null
+      || chapterBylines.actual[2].title !== 'Faith'
+      || chapterBylines.actual.slice(1).some((ch, i) => ch.subtitle !== expectedAuthors[i] || ch.dateRange)
+      || JSON.stringify(chapterBylines.list) !== JSON.stringify(expectedAuthors)
+      || chapterBylines.preview.subtitle !== 'C. H. Spurgeon'
+      || chapterBylines.explicit.subtitle !== 'By C. H. Spurgeon'
+      || chapterBylines.ordinaryDash.subtitle !== null
+      || chapterBylines.year.dateRange !== '1870') {
+      throw new Error('Chapter authors did not parse as separate bylines: ' + JSON.stringify(chapterBylines));
+    }
+
     console.log('Open video, transition defaults, promotion artwork, and author-photo UI smoke test passed.');
   } finally {
     if (!window.isDestroyed()) window.destroy();

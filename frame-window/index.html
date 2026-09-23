@@ -382,17 +382,18 @@
     ctx.fill();
 
     if (authorPortrait) {
-      drawAuthorPortrait(ctx, authorPortrait, centerX, 315, 76, [ar, ag, ab], {
+      // Give the portrait visual priority; keep the name underneath even when
+      // it wraps, rather than centering a tall name block into the photo.
+      drawAuthorPortrait(ctx, authorPortrait, centerX, 344, 116, [ar, ag, ab], {
         positionX: params.authorPhotoPositionX ?? 50,
         positionY: params.authorPhotoPositionY ?? 35,
         zoom: params.authorPhotoZoom ?? 1
       });
-      const fitted = fitText(ctx, card.primary, 'EB Garamond', 56, 30, textAreaW - 80, 130);
+      const fitted = fitText(ctx, card.primary, 'EB Garamond', 42, 27, textAreaW - 80, 112);
       ctx.font = `400 ${fitted.fontSize}px "EB Garamond"`;
       ctx.fillStyle = 'rgba(255,255,255,0.97)';
       const lineH = fitted.fontSize * 1.16;
-      const blockHeight = fitted.lines.length * lineH;
-      const primaryY = 482 - blockHeight / 2 + lineH / 2;
+      const primaryY = 500 + lineH / 2;
       fitted.lines.forEach((line, index) => ctx.fillText(line, centerX, primaryY + index * lineH));
       ctx.restore();
       return;

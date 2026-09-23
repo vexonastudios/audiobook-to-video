@@ -265,22 +265,62 @@ async function run() {
       throw new Error('Author photo did not change the author opening card.');
     }
     const authorPhotoPixel = await sharp(openingAuthorPath)
-      .extract({ left: 1320, top: 473, width: 1, height: 1 })
+      .extract({ left: 1320, top: 516, width: 1, height: 1 })
       .removeAlpha()
       .raw()
       .toBuffer();
     if (authorPhotoPixel[0] > 60 || authorPhotoPixel[1] < 200 || authorPhotoPixel[2] > 100) {
       throw new Error(`Circular author photo was not rendered above the author name: ${Array.from(authorPhotoPixel)}`);
     }
+    const enlargedPortraitPixel = await sharp(openingAuthorPath)
+      .extract({ left: 1470, top: 516, width: 1, height: 1 }).removeAlpha().raw().toBuffer();
+    if (enlargedPortraitPixel[0] > 60 || enlargedPortraitPixel[1] < 200 || enlargedPortraitPixel[2] > 100) {
+      throw new Error('The author portrait did not fill its enlarged circular area.');
+    }
     const cropTopLeftPixel = await sharp(openingAuthorCropTopLeftPath)
-      .extract({ left: 1320, top: 473, width: 1, height: 1 }).removeAlpha().raw().toBuffer();
+      .extract({ left: 1320, top: 516, width: 1, height: 1 }).removeAlpha().raw().toBuffer();
     const cropBottomRightPixel = await sharp(openingAuthorCropBottomRightPath)
-      .extract({ left: 1320, top: 473, width: 1, height: 1 }).removeAlpha().raw().toBuffer();
+      .extract({ left: 1320, top: 516, width: 1, height: 1 }).removeAlpha().raw().toBuffer();
     if (cropTopLeftPixel[0] < 220 || cropTopLeftPixel[1] > 70 || cropTopLeftPixel[2] > 70) {
       throw new Error(`Top-left author crop did not move to the requested focus: ${Array.from(cropTopLeftPixel)}`);
     }
     if (cropBottomRightPixel[0] < 220 || cropBottomRightPixel[1] < 200 || cropBottomRightPixel[2] > 70) {
       throw new Error(`Bottom-right author crop did not move to the requested focus: ${Array.from(cropBottomRightPixel)}`);
+    }
+    const authorLayout = await window.webContents.executeJavaScript(`(async () => {
+      const portrait = await loadImage(${JSON.stringify(authorPhotoDataURL)});
+      function inspect(name, withPhoto) {
+        const ctx = document.createElement('canvas').getContext('2d');
+        const text = [], circles = [];
+        const fillText = ctx.fillText.bind(ctx), arc = ctx.arc.bind(ctx);
+        ctx.fillText = (value, x, y) => {
+          const metrics = ctx.measureText(value);
+          if (value !== 'WRITTEN BY') text.push({ value, x, y, font: ctx.font,
+            top: y - metrics.actualBoundingBoxAscent, bottom: y + metrics.actualBoundingBoxDescent });
+          fillText(value, x, y);
+        };
+        ctx.arc = (x, y, radius, ...rest) => { circles.push({ x, y, radius }); arc(x, y, radius, ...rest); };
+        drawOpeningTitleCard(ctx, { type: 'author', label: 'WRITTEN BY', primary: name, secondary: '' },
+          withPhoto ? { authorPhotoImage: portrait } : {});
+        return { text, portrait: circles.find(circle => circle.radius > 10) };
+      }
+      return { short: inspect('Norman Macleod', true),
+        long: inspect('The Reverend Alexander John Montgomery Macleod of Edinburgh', true),
+        textOnly: inspect('Norman Macleod', false) };
+    })()`);
+    if (authorLayout.short.portrait?.radius !== 116 || authorLayout.short.portrait?.y !== 344
+      || authorLayout.short.text.length !== 1 || !authorLayout.short.text[0].font.includes('42px')) {
+      throw new Error('Author card did not prioritize the larger portrait and smaller name: ' + JSON.stringify(authorLayout));
+    }
+    for (const layout of [authorLayout.short, authorLayout.long]) {
+      if (layout.text.some(line => line.x !== 880 || line.top < 480 || line.bottom > 620)) {
+        throw new Error('Author name overlaps the enlarged portrait or overflows its lower area: ' + JSON.stringify(layout));
+      }
+    }
+    if (authorLayout.long.text.length < 2 || authorLayout.textOnly.portrait
+      || authorLayout.textOnly.text.length !== 1 || !authorLayout.textOnly.text[0].font.includes('70px')
+      || authorLayout.textOnly.text[0].y !== 383) {
+      throw new Error('Long-name wrapping or the unchanged text-only author layout regressed: ' + JSON.stringify(authorLayout));
     }
     if (fs.readFileSync(openingTitlePath).equals(fs.readFileSync(openingSeriesPath))) {
       throw new Error('Series card did not differ from the title card.');
@@ -375,6 +415,19 @@ async function run() {
       throw new Error('Print promotion overlay was fully transparent.');
     }
 
+    // Optional visual QA with real user assets; never modify their originals.
+    if (process.env.OPENING_PREVIEW_COVER && process.env.OPENING_PREVIEW_AUTHOR) {
+      const realCover = await prepareCoverImage(process.env.OPENING_PREVIEW_COVER);
+      const realAuthor = await imageToDataURL(process.env.OPENING_PREVIEW_AUTHOR);
+      await window.webContents.executeJavaScript(
+        `window.renderOpeningFrameToFile(${JSON.stringify({
+          ...baseParams, coverDataURL: realCover.dataURL, bgDataURL: realCover.dataURL,
+          authorPhotoDataURL: realAuthor, accentColor: [235, 35, 35],
+          openingPreviewCard: { type: 'author', label: 'WRITTEN BY',
+            primary: process.env.OPENING_PREVIEW_AUTHOR_NAME || 'Author Name', secondary: '' }
+        })}, ${JSON.stringify(path.join(outputDir, 'author-photo-preview.png'))})`
+      );
+    }
     console.log(`Frame renderer smoke test passed: ${outputDir}`);
   } finally {
     if (!window.isDestroyed()) window.destroy();
